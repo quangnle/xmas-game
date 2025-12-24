@@ -17,7 +17,10 @@ import {
     GAME_STATES,
     DICE_CONFIG,
     SNAPSHOT_CONFIG,
-    CAMERA_CONFIG
+    CAMERA_CONFIG,
+    WEAPONS,
+    NUM_KNIVES,
+    NUM_SWORDS
 } from './config.js';
 
 import { $, showModal, rollDie } from './utils.js';
@@ -54,6 +57,7 @@ export class Game {
         this.snowmen = [];      // {x, y, treasureIndex}
         this.treasures = [];    // {x, y, value, found, index}
         this.gifts = [];        // {x, y}
+        this.weapons = [];      // {x, y, type: 'KNIFE' | 'SWORD'}
         
         this.initializeCanvas();
         this.init();
@@ -91,6 +95,7 @@ export class Game {
         this.initPlayers();
         this.placeTreasuresAndSnowmen();
         this.placeGifts();
+        this.placeWeapons();
         
         this.updateUI();
         // Start with map fit to screen instead of centering on player at corner
@@ -183,6 +188,60 @@ export class Game {
     }
 
     /**
+     * Place weapons on the map
+     */
+    placeWeapons() {
+        // Place knives
+        for (let i = 0; i < NUM_KNIVES; i++) {
+            let wx, wy;
+            do {
+                wx = Math.floor(Math.random() * GRID_SIZE);
+                wy = Math.floor(Math.random() * GRID_SIZE);
+            } while (this.isOccupied(wx, wy));
+            
+            this.weapons.push({ x: wx, y: wy, type: 'KNIFE' });
+        }
+        
+        // Place swords
+        for (let i = 0; i < NUM_SWORDS; i++) {
+            let wx, wy;
+            do {
+                wx = Math.floor(Math.random() * GRID_SIZE);
+                wy = Math.floor(Math.random() * GRID_SIZE);
+            } while (this.isOccupied(wx, wy));
+            
+            this.weapons.push({ x: wx, y: wy, type: 'SWORD' });
+        }
+    }
+
+    /**
+     * Place weapons on the map
+     */
+    placeWeapons() {
+        // Place knives
+        for (let i = 0; i < NUM_KNIVES; i++) {
+            let wx, wy;
+            do {
+                wx = Math.floor(Math.random() * GRID_SIZE);
+                wy = Math.floor(Math.random() * GRID_SIZE);
+            } while (this.isOccupied(wx, wy));
+            
+            this.weapons.push({ x: wx, y: wy, type: 'KNIFE' });
+        }
+        
+        // Place swords
+        for (let i = 0; i < NUM_SWORDS; i++) {
+            let wx, wy;
+            do {
+                wx = Math.floor(Math.random() * GRID_SIZE);
+                wy = Math.floor(Math.random() * GRID_SIZE);
+            } while (this.isOccupied(wx, wy));
+            
+            this.weapons.push({ x: wx, y: wy, type: 'SWORD' });
+        }
+    }
+
+    /**
      * Check if a position is occupied
      * @param {number} x - X coordinate
      * @param {number} y - Y coordinate
@@ -193,6 +252,7 @@ export class Game {
         if (this.treasures.some(t => t.x === x && t.y === y)) return true;
         if (this.snowmen.some(s => s.x === x && s.y === y)) return true;
         if (this.gifts.some(g => g.x === x && g.y === y)) return true;
+        if (this.weapons.some(w => w.x === x && w.y === y)) return true;
         return false;
     }
 
@@ -426,6 +486,16 @@ export class Game {
             this.updateUI();
         }
 
+        // Check for weapon
+        const weaponIdx = this.weapons.findIndex(w => w.x === p.x && w.y === p.y);
+        if (weaponIdx !== -1) {
+            const weapon = this.weapons[weaponIdx];
+            this.weapons.splice(weaponIdx, 1);
+            p.weapons.push(weapon.type);
+            this.showToast(`Picked up ${WEAPONS[weapon.type].emoji} ${WEAPONS[weapon.type].name}! +${WEAPONS[weapon.type].bonus} in duels!`);
+            this.updateUI();
+        }
+
         // Check for snowman (get clue)
         const snowman = this.snowmen.find(s => s.x === p.x && s.y === p.y);
         if (snowman) {
@@ -463,33 +533,123 @@ export class Game {
      */
     startDuel(p1, p2) {
         this.state = GAME_STATES.DUEL;
+        this.duelP1 = p1;
+        this.duelP2 = p2;
+        this.duelP1Weapon = null;
+        this.duelP2Weapon = null;
+        
         $('duelModal').classList.remove('hidden');
         $('duelP1Avatar').style.borderColor = p1.color;
         $('duelP2Avatar').style.borderColor = p2.color;
         $('duelP1Avatar').innerText = `P${p1.id + 1}`;
         $('duelP2Avatar').innerText = `P${p2.id + 1}`;
         
+        // Setup weapon selection UI
+        this.setupDuelWeapons(p1, p2);
+        
         $('duelRollBtn').onclick = () => {
             const r1 = rollDie();
             const r2 = rollDie();
             
-            $('duelResult1').innerText = r1;
-            $('duelResult2').innerText = r2;
+            // Apply weapon bonuses
+            const p1Bonus = this.duelP1Weapon ? WEAPONS[this.duelP1Weapon].bonus : 0;
+            const p2Bonus = this.duelP2Weapon ? WEAPONS[this.duelP2Weapon].bonus : 0;
+            
+            const finalR1 = r1 + p1Bonus;
+            const finalR2 = r2 + p2Bonus;
+            
+            $('duelResult1').innerText = `${r1}${p1Bonus > 0 ? `+${p1Bonus}` : ''} = ${finalR1}`;
+            $('duelResult2').innerText = `${r2}${p2Bonus > 0 ? `+${p2Bonus}` : ''} = ${finalR2}`;
             
             setTimeout(() => {
-                this.resolveDuel(p1, p2, r1, r2);
+                this.resolveDuel(p1, p2, finalR1, finalR2);
             }, 1000);
         };
+    }
+
+    /**
+     * Setup weapon selection for duel
+     */
+    setupDuelWeapons(p1, p2) {
+        // Create weapon selection containers if they don't exist
+        let p1WeaponDiv = document.getElementById('duelP1Weapon');
+        let p2WeaponDiv = document.getElementById('duelP2Weapon');
+        
+        if (!p1WeaponDiv) {
+            p1WeaponDiv = document.createElement('div');
+            p1WeaponDiv.id = 'duelP1Weapon';
+            p1WeaponDiv.className = 'mb-2';
+            $('duelP1Avatar').parentElement.appendChild(p1WeaponDiv);
+        }
+        
+        if (!p2WeaponDiv) {
+            p2WeaponDiv = document.createElement('div');
+            p2WeaponDiv.id = 'duelP2Weapon';
+            p2WeaponDiv.className = 'mb-2';
+            $('duelP2Avatar').parentElement.appendChild(p2WeaponDiv);
+        }
+        
+        // Setup P1 weapons
+        p1WeaponDiv.innerHTML = '';
+        if (p1.weapons.length > 0) {
+            const select = document.createElement('select');
+            select.id = 'p1WeaponSelect';
+            select.className = 'text-xs bg-slate-800 text-white px-2 py-1 rounded';
+            select.innerHTML = '<option value="">No weapon</option>';
+            p1.weapons.forEach(w => {
+                const option = document.createElement('option');
+                option.value = w;
+                option.textContent = `${WEAPONS[w].emoji} ${WEAPONS[w].name} (+${WEAPONS[w].bonus})`;
+                select.appendChild(option);
+            });
+            select.onchange = (e) => {
+                this.duelP1Weapon = e.target.value || null;
+            };
+            p1WeaponDiv.appendChild(select);
+        } else {
+            p1WeaponDiv.innerHTML = '<span class="text-xs text-gray-400">No weapons</span>';
+        }
+        
+        // Setup P2 weapons
+        p2WeaponDiv.innerHTML = '';
+        if (p2.weapons.length > 0) {
+            const select = document.createElement('select');
+            select.id = 'p2WeaponSelect';
+            select.className = 'text-xs bg-slate-800 text-white px-2 py-1 rounded';
+            select.innerHTML = '<option value="">No weapon</option>';
+            p2.weapons.forEach(w => {
+                const option = document.createElement('option');
+                option.value = w;
+                option.textContent = `${WEAPONS[w].emoji} ${WEAPONS[w].name} (+${WEAPONS[w].bonus})`;
+                select.appendChild(option);
+            });
+            select.onchange = (e) => {
+                this.duelP2Weapon = e.target.value || null;
+            };
+            p2WeaponDiv.appendChild(select);
+        } else {
+            p2WeaponDiv.innerHTML = '<span class="text-xs text-gray-400">No weapons</span>';
+        }
     }
 
     /**
      * Resolve duel result
      * @param {Object} p1 - Player 1
      * @param {Object} p2 - Player 2
-     * @param {number} r1 - Player 1 roll
-     * @param {number} r2 - Player 2 roll
+     * @param {number} r1 - Player 1 roll (with bonus)
+     * @param {number} r2 - Player 2 roll (with bonus)
      */
     resolveDuel(p1, p2, r1, r2) {
+        // Remove used weapons
+        if (this.duelP1Weapon && p1.weapons.includes(this.duelP1Weapon)) {
+            const index = p1.weapons.indexOf(this.duelP1Weapon);
+            p1.weapons.splice(index, 1);
+        }
+        if (this.duelP2Weapon && p2.weapons.includes(this.duelP2Weapon)) {
+            const index = p2.weapons.indexOf(this.duelP2Weapon);
+            p2.weapons.splice(index, 1);
+        }
+        
         if (r1 > r2) {
             // Attacker wins
             p2.x = p2.startPos.x;
@@ -518,6 +678,9 @@ export class Game {
             $('duelResult1').innerText = '-';
             $('duelResult2').innerText = '-';
             this.showToast('Tie! Roll again!');
+            // Reset weapon selection for next roll
+            this.duelP1Weapon = null;
+            this.duelP2Weapon = null;
             // Modal stays open, player can roll again
         }
     }
@@ -902,7 +1065,7 @@ export class Game {
     }
 
     /**
-     * Render game objects (gifts, snowmen, treasures)
+     * Render game objects (gifts, snowmen, treasures, weapons)
      */
     renderObjects() {
         this.ctx.font = '24px Arial';
@@ -910,6 +1073,11 @@ export class Game {
         // Gifts
         this.gifts.forEach(g => {
             this.ctx.fillText('🎁', g.x * CELL_SIZE + CELL_SIZE / 2, g.y * CELL_SIZE + CELL_SIZE / 2);
+        });
+
+        // Weapons
+        this.weapons.forEach(w => {
+            this.ctx.fillText(WEAPONS[w.type].emoji, w.x * CELL_SIZE + CELL_SIZE / 2, w.y * CELL_SIZE + CELL_SIZE / 2);
         });
 
         // Snowmen

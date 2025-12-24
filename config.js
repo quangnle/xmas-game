@@ -44,6 +44,14 @@ export const NUM_TREASURES = 4;
 export const NUM_GIFTS = 20;
 export const GIFT_VALUE = 10;
 
+// Weapons Configuration
+export const WEAPONS = {
+    KNIFE: { emoji: '🔪', bonus: 2, name: 'Knife' },
+    SWORD: { emoji: '🗡️', bonus: 3, name: 'Sword' }
+};
+export const NUM_KNIVES = 2;
+export const NUM_SWORDS = 2;
+
 // Game States
 export const GAME_STATES = {
     IDLE: 'IDLE',
