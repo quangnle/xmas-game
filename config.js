@@ -26,8 +26,8 @@ export const TERRAIN_TYPES = {
 // Terrain Distribution (70% snow, 20% ice, 10% tree)
 export const TERRAIN_DISTRIBUTION = {
     SNOW_THRESHOLD: 0.7,
-    ICE_THRESHOLD: 0.2,
-    TREE_THRESHOLD: 0.1
+    ICE_THRESHOLD: 0.9,
+    TREE_THRESHOLD: 1.0
 };
 
 // Players Configuration
