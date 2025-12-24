@@ -20,7 +20,11 @@ import {
     CAMERA_CONFIG,
     WEAPONS,
     NUM_KNIVES,
-    NUM_SWORDS
+    NUM_SWORDS,
+    SNOWMAN_MIN_DIST,
+    SNOWMAN_START_POS_MIN_DIST,
+    TREASURE_MIN_DIST,
+    TREASURE_START_POINT_MIN_DIST
 } from './config.js';
 
 import { $, showModal, rollDie } from './utils.js';
@@ -140,16 +144,156 @@ export class Game {
     }
 
     /**
+     * Calculate shortest distance between two positions using Dijkstra's algorithm
+     * Accounts for terrain costs (Snow=1, Ice=2, Tree=3)
+     * @param {Object} pos1 - Position 1 {x, y}
+     * @param {Object} pos2 - Position 2 {x, y}
+     * @returns {number} - Shortest distance considering terrain costs
+     */
+    shortestDistance(pos1, pos2) {
+        // If same position, return 0
+        if (pos1.x === pos2.x && pos1.y === pos2.y) {
+            return 0;
+        }
+
+        // Dijkstra's algorithm to find shortest path
+        const dist = {};
+        const visited = new Set();
+        const queue = [];
+        
+        // Initialize distances
+        for (let y = 0; y < GRID_SIZE; y++) {
+            for (let x = 0; x < GRID_SIZE; x++) {
+                const key = `${x},${y}`;
+                dist[key] = Infinity;
+            }
+        }
+        
+        const startKey = `${pos1.x},${pos1.y}`;
+        dist[startKey] = 0;
+        queue.push({ x: pos1.x, y: pos1.y, cost: 0 });
+        
+        // Directions: up, down, left, right
+        const directions = [
+            { dx: 0, dy: -1 }, // up
+            { dx: 0, dy: 1 },  // down
+            { dx: -1, dy: 0 }, // left
+            { dx: 1, dy: 0 }   // right
+        ];
+        
+        while (queue.length > 0) {
+            // Get node with minimum cost
+            queue.sort((a, b) => a.cost - b.cost);
+            const current = queue.shift();
+            const currentKey = `${current.x},${current.y}`;
+            
+            // Skip if already visited
+            if (visited.has(currentKey)) continue;
+            visited.add(currentKey);
+            
+            // Check if reached destination
+            if (current.x === pos2.x && current.y === pos2.y) {
+                return dist[currentKey];
+            }
+            
+            // Check all neighbors
+            for (const dir of directions) {
+                const nx = current.x + dir.dx;
+                const ny = current.y + dir.dy;
+                
+                // Boundary check
+                if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) continue;
+                
+                const neighborKey = `${nx},${ny}`;
+                if (visited.has(neighborKey)) continue;
+                
+                // Get terrain cost
+                const terrainCost = this.grid[ny] ? this.grid[ny][nx] : TERRAIN_TYPES.SNOW;
+                
+                // Calculate new distance
+                const newDist = dist[currentKey] + terrainCost;
+                
+                if (newDist < dist[neighborKey]) {
+                    dist[neighborKey] = newDist;
+                    queue.push({ x: nx, y: ny, cost: newDist });
+                }
+            }
+        }
+        
+        // If no path found, return Manhattan distance as fallback
+        return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y);
+    }
+
+    /**
+     * Check if position is too close to any starting positions
+     * @param {number} x - X coordinate
+     * @param {number} y - Y coordinate
+     * @param {number} minDist - Minimum distance required
+     * @returns {boolean}
+     */
+    isTooCloseToStartPos(x, y, minDist) {
+        return this.players.some(p => {
+            const dist = this.shortestDistance({ x, y }, { x: p.startPos.x, y: p.startPos.y });
+            return dist < minDist;
+        });
+    }
+
+    /**
+     * Check if position is too close to existing treasures
+     * @param {number} x - X coordinate
+     * @param {number} y - Y coordinate
+     * @param {number} minDist - Minimum distance required
+     * @returns {boolean}
+     */
+    isTooCloseToTreasures(x, y, minDist) {
+        return this.treasures.some(t => {
+            const dist = this.shortestDistance({ x, y }, { x: t.x, y: t.y });
+            return dist < minDist;
+        });
+    }
+
+    /**
+     * Check if position is too close to existing snowmen
+     * @param {number} x - X coordinate
+     * @param {number} y - Y coordinate
+     * @param {number} minDist - Minimum distance required
+     * @returns {boolean}
+     */
+    isTooCloseToSnowmen(x, y, minDist) {
+        return this.snowmen.some(s => {
+            const dist = this.shortestDistance({ x, y }, { x: s.x, y: s.y });
+            return dist < minDist;
+        });
+    }
+
+    /**
      * Place treasures and their associated snowmen
      */
     placeTreasuresAndSnowmen() {
         for (let i = 0; i < NUM_TREASURES; i++) {
-            // Place treasure (not at corners)
+            // Place treasure with distance constraints
             let tx, ty;
+            let attempts = 0;
+            const maxAttempts = 1000; // Prevent infinite loop
+            
             do {
                 tx = Math.floor(Math.random() * (GRID_SIZE - 4)) + 2;
                 ty = Math.floor(Math.random() * (GRID_SIZE - 4)) + 2;
-            } while (this.isOccupied(tx, ty));
+                attempts++;
+            } while (
+                attempts < maxAttempts && (
+                    this.isOccupied(tx, ty) ||
+                    this.isTooCloseToTreasures(tx, ty, TREASURE_MIN_DIST) ||
+                    this.isTooCloseToStartPos(tx, ty, TREASURE_START_POINT_MIN_DIST)
+                )
+            );
+            
+            if (attempts >= maxAttempts) {
+                console.warn(`Could not place treasure ${i} after ${maxAttempts} attempts`);
+                // Fallback: place at a safe position
+                tx = Math.floor(Math.random() * (GRID_SIZE - 4)) + 2;
+                ty = Math.floor(Math.random() * (GRID_SIZE - 4)) + 2;
+            }
             
             this.treasures.push({
                 x: tx,
@@ -159,15 +303,29 @@ export class Game {
                 index: i
             });
 
-            // Place snowman linked to this treasure (at least 5 cells away)
+            // Place snowman linked to this treasure with distance constraints
             let sx, sy;
+            attempts = 0;
+            
             do {
                 sx = Math.floor(Math.random() * GRID_SIZE);
                 sy = Math.floor(Math.random() * GRID_SIZE);
+                attempts++;
             } while (
-                this.isOccupied(sx, sy) ||
-                (Math.abs(sx - tx) < 5 && Math.abs(sy - ty) < 5)
+                attempts < maxAttempts && (
+                    this.isOccupied(sx, sy) ||
+                    this.isTooCloseToSnowmen(sx, sy, SNOWMAN_MIN_DIST) ||
+                    this.isTooCloseToStartPos(sx, sy, SNOWMAN_START_POS_MIN_DIST) ||
+                    this.shortestDistance({ x: sx, y: sy }, { x: tx, y: ty }) < 5
+                )
             );
+            
+            if (attempts >= maxAttempts) {
+                console.warn(`Could not place snowman ${i} after ${maxAttempts} attempts`);
+                // Fallback: place at a safe position
+                sx = Math.floor(Math.random() * GRID_SIZE);
+                sy = Math.floor(Math.random() * GRID_SIZE);
+            }
             
             this.snowmen.push({ x: sx, y: sy, treasureIndex: i });
         }

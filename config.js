@@ -81,3 +81,9 @@ export const CAMERA_CONFIG = {
     LERP_SPEED: 0.1
 };
 
+// Placement Distance Thresholds
+export const SNOWMAN_MIN_DIST = 15; // Minimum distance between snowmen
+export const SNOWMAN_START_POS_MIN_DIST = 15; // Minimum distance from snowman to starting positions
+export const TREASURE_MIN_DIST = 15; // Minimum distance between treasures
+export const TREASURE_START_POINT_MIN_DIST = 15; // Minimum distance from treasure to starting positions
+
