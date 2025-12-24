@@ -11,7 +11,7 @@ export const COLORS = {
     snow: '#f8fafc',      // Value 1 - Snow terrain
     ice: '#bae6fd',       // Value 2 - Ice terrain
     tree: '#14532d',      // Value 3 - Tree terrain (very dark green for background)
-    gridLine: '#e2e8f0',
+    gridLine: '#f1f5f9',  // Lighter grid line color
     highlight: 'rgba(250, 204, 21, 0.4)',
     background: '#0f172a'  // bg-slate-900
 };
