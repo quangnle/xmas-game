@@ -134,6 +134,7 @@ export class Game {
             ...p,
             coins: 0,
             inventory: [], // IDs of treasures clue found
+            weapons: [], // Array of weapon types: ['KNIFE', 'SWORD', etc.]
             startPos: { x: p.x, y: p.y }
         }));
     }
@@ -491,6 +492,7 @@ export class Game {
         if (weaponIdx !== -1) {
             const weapon = this.weapons[weaponIdx];
             this.weapons.splice(weaponIdx, 1);
+            if (!p.weapons) p.weapons = [];
             p.weapons.push(weapon.type);
             this.showToast(`Picked up ${WEAPONS[weapon.type].emoji} ${WEAPONS[weapon.type].name}! +${WEAPONS[weapon.type].bonus} in duels!`);
             this.updateUI();
@@ -591,6 +593,7 @@ export class Game {
         
         // Setup P1 weapons
         p1WeaponDiv.innerHTML = '';
+        if (!p1.weapons) p1.weapons = [];
         if (p1.weapons.length > 0) {
             const select = document.createElement('select');
             select.id = 'p1WeaponSelect';
@@ -612,6 +615,7 @@ export class Game {
         
         // Setup P2 weapons
         p2WeaponDiv.innerHTML = '';
+        if (!p2.weapons) p2.weapons = [];
         if (p2.weapons.length > 0) {
             const select = document.createElement('select');
             select.id = 'p2WeaponSelect';
