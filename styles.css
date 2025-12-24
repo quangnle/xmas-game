@@ -55,3 +55,10 @@ canvas {
     image-rendering: pixelated;
 }
 
+/* Game Container - Center aligned */
+#gameContainer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+

@@ -540,6 +540,10 @@ export class Game {
         this.duelP1Weapon = null;
         this.duelP2Weapon = null;
         
+        // Reset duel results to initial state
+        $('duelResult1').innerText = '-';
+        $('duelResult2').innerText = '-';
+        
         $('duelModal').classList.remove('hidden');
         $('duelP1Avatar').style.borderColor = p1.color;
         $('duelP2Avatar').style.borderColor = p2.color;
@@ -549,9 +553,20 @@ export class Game {
         // Setup weapon selection UI
         this.setupDuelWeapons(p1, p2);
         
+        // Reset roll button state
+        $('duelRollBtn').disabled = false;
+        $('duelRollBtn').classList.add('animate-pulse');
+        $('duelRollBtn').innerText = 'Fight!';
+        
         $('duelRollBtn').onclick = () => {
-            const r1 = rollDie();
-            const r2 = rollDie();
+            // Roll 2 dice for each player
+            const d1_1 = rollDie();
+            const d1_2 = rollDie();
+            const r1 = d1_1 + d1_2;  // Player 1 total from 2 dice
+            
+            const d2_1 = rollDie();
+            const d2_2 = rollDie();
+            const r2 = d2_1 + d2_2;  // Player 2 total from 2 dice
             
             // Apply weapon bonuses
             const p1Bonus = this.duelP1Weapon ? WEAPONS[this.duelP1Weapon].bonus : 0;
@@ -560,12 +575,32 @@ export class Game {
             const finalR1 = r1 + p1Bonus;
             const finalR2 = r2 + p2Bonus;
             
-            $('duelResult1').innerText = `${r1}${p1Bonus > 0 ? `+${p1Bonus}` : ''} = ${finalR1}`;
-            $('duelResult2').innerText = `${r2}${p2Bonus > 0 ? `+${p2Bonus}` : ''} = ${finalR2}`;
+            // Display results showing both dice and total
+            // Only show final total if there's a bonus, otherwise just show dice sum
+            const result1Text = p1Bonus > 0 
+                ? `${d1_1}+${d1_2}=${r1}+${p1Bonus} = ${finalR1}`
+                : `${d1_1}+${d1_2}=${r1}`;
+            const result2Text = p2Bonus > 0 
+                ? `${d2_1}+${d2_2}=${r2}+${p2Bonus} = ${finalR2}`
+                : `${d2_1}+${d2_2}=${r2}`;
             
-            setTimeout(() => {
-                this.resolveDuel(p1, p2, finalR1, finalR2);
-            }, 1000);
+            $('duelResult1').innerText = result1Text;
+            $('duelResult2').innerText = result2Text;
+            
+            // Disable roll button and change to OK button
+            $('duelRollBtn').disabled = false; // Keep enabled so user can click OK
+            $('duelRollBtn').classList.remove('animate-pulse');
+            $('duelRollBtn').innerText = 'OK';
+            
+            // Store duel results for when OK is clicked
+            this.pendingDuelResults = { p1, p2, finalR1, finalR2 };
+            
+            // Change onclick to resolve duel when OK is clicked
+            $('duelRollBtn').onclick = () => {
+                this.resolveDuel(this.pendingDuelResults.p1, this.pendingDuelResults.p2, 
+                                 this.pendingDuelResults.finalR1, this.pendingDuelResults.finalR2);
+                this.pendingDuelResults = null;
+            };
         };
     }
 
@@ -598,7 +633,7 @@ export class Game {
             const select = document.createElement('select');
             select.id = 'p1WeaponSelect';
             select.className = 'text-xs bg-slate-800 text-white px-2 py-1 rounded';
-            select.innerHTML = '<option value="">No weapon</option>';
+            select.innerHTML = '<option value="" selected>No weapon</option>';
             p1.weapons.forEach(w => {
                 const option = document.createElement('option');
                 option.value = w;
@@ -620,7 +655,7 @@ export class Game {
             const select = document.createElement('select');
             select.id = 'p2WeaponSelect';
             select.className = 'text-xs bg-slate-800 text-white px-2 py-1 rounded';
-            select.innerHTML = '<option value="">No weapon</option>';
+            select.innerHTML = '<option value="" selected>No weapon</option>';
             p2.weapons.forEach(w => {
                 const option = document.createElement('option');
                 option.value = w;
@@ -644,32 +679,81 @@ export class Game {
      * @param {number} r2 - Player 2 roll (with bonus)
      */
     resolveDuel(p1, p2, r1, r2) {
-        // Remove used weapons
-        if (this.duelP1Weapon && p1.weapons.includes(this.duelP1Weapon)) {
-            const index = p1.weapons.indexOf(this.duelP1Weapon);
-            p1.weapons.splice(index, 1);
+        // Remove used weapons - weapons are consumed after use regardless of result (win/lose/tie)
+        // Ensure weapons arrays exist
+        if (!p1.weapons) p1.weapons = [];
+        if (!p2.weapons) p2.weapons = [];
+        
+        // Remove P1's weapon if used (always remove, even if result is tie)
+        if (this.duelP1Weapon) {
+            const weaponIndex = p1.weapons.indexOf(this.duelP1Weapon);
+            if (weaponIndex !== -1) {
+                p1.weapons.splice(weaponIndex, 1);
+                // Weapon has been consumed
+            }
         }
-        if (this.duelP2Weapon && p2.weapons.includes(this.duelP2Weapon)) {
-            const index = p2.weapons.indexOf(this.duelP2Weapon);
-            p2.weapons.splice(index, 1);
+        
+        // Remove P2's weapon if used (always remove, even if result is tie)
+        if (this.duelP2Weapon) {
+            const weaponIndex = p2.weapons.indexOf(this.duelP2Weapon);
+            if (weaponIndex !== -1) {
+                p2.weapons.splice(weaponIndex, 1);
+                // Weapon has been consumed
+            }
         }
         
         if (r1 > r2) {
-            // Attacker wins
+            // Attacker (p1) wins
             p2.x = p2.startPos.x;
             p2.y = p2.startPos.y;
-            showModal('Duel Result', `Player ${p1.name} wins! ${p2.name} returns to starting position.`);
+            
+            // Transfer coins: loser loses 100 (or all if less than 100), winner gains that amount
+            const coinsToTransfer = Math.min(100, p2.coins);
+            p2.coins -= coinsToTransfer;
+            p1.coins += coinsToTransfer;
+            
+            const coinMessage = coinsToTransfer > 0 
+                ? ` and loses ${coinsToTransfer} coins to ${p1.name}!`
+                : '';
+            
+            showModal('Duel Result', `Player ${p1.name} wins! ${p2.name} returns to starting position${coinMessage}`);
+            
+            // Update UI
+            this.updateUI();
             
             // Close modal and end duel
             $('duelModal').classList.add('hidden');
             this.centerCameraOnPlayer();
+            
+            // If attacker has no moves left, set to IDLE so they can roll dice again or skip turn
+            if (this.currentMoves <= 0) {
+                this.state = GAME_STATES.IDLE;
+                // Enable roll button if state is IDLE
+                $('rollBtn').disabled = false;
+                $('rollBtn').innerHTML = '<i class="fas fa-dice"></i> ROLL DICE';
+                $('rollBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                this.state = GAME_STATES.MOVE;
+            }
             this.updateButtons();
-            this.state = GAME_STATES.MOVE;
         } else if (r2 > r1) {
-            // Defender wins
+            // Defender (p2) wins
             p1.x = p1.startPos.x;
             p1.y = p1.startPos.y;
-            showModal('Duel Result', `Player ${p2.name} wins! ${p1.name} returns to starting position.`);
+            
+            // Transfer coins: loser loses 100 (or all if less than 100), winner gains that amount
+            const coinsToTransfer = Math.min(100, p1.coins);
+            p1.coins -= coinsToTransfer;
+            p2.coins += coinsToTransfer;
+            
+            const coinMessage = coinsToTransfer > 0 
+                ? ` and loses ${coinsToTransfer} coins to ${p2.name}!`
+                : '';
+            
+            showModal('Duel Result', `Player ${p2.name} wins! ${p1.name} returns to starting position${coinMessage}`);
+            
+            // Update UI
+            this.updateUI();
             this.currentMoves = 0;
             this.skipTurn();
             
@@ -679,12 +763,51 @@ export class Game {
             this.state = GAME_STATES.MOVE;
         } else {
             // Tie - continue dueling by resetting and allowing another roll
+            // Note: Weapons were already consumed above, so they cannot be reused
             $('duelResult1').innerText = '-';
             $('duelResult2').innerText = '-';
             this.showToast('Tie! Roll again!');
-            // Reset weapon selection for next roll
+            // Reset weapon selection for next roll (need to select new weapons if they have any left)
             this.duelP1Weapon = null;
             this.duelP2Weapon = null;
+            // Refresh weapon selection UI to reflect consumed weapons
+            this.setupDuelWeapons(p1, p2);
+            // Reset button back to Fight! for next roll
+            $('duelRollBtn').disabled = false;
+            $('duelRollBtn').classList.add('animate-pulse');
+            $('duelRollBtn').innerText = 'Fight!';
+            // Reset onclick handler for next roll
+            $('duelRollBtn').onclick = () => {
+                // Roll 2 dice for each player
+                const d1_1 = rollDie();
+                const d1_2 = rollDie();
+                const r1 = d1_1 + d1_2;
+                const d2_1 = rollDie();
+                const d2_2 = rollDie();
+                const r2 = d2_1 + d2_2;
+                const p1Bonus = this.duelP1Weapon ? WEAPONS[this.duelP1Weapon].bonus : 0;
+                const p2Bonus = this.duelP2Weapon ? WEAPONS[this.duelP2Weapon].bonus : 0;
+                const finalR1 = r1 + p1Bonus;
+                const finalR2 = r2 + p2Bonus;
+                // Only show final total if there's a bonus, otherwise just show dice sum
+                const result1Text = p1Bonus > 0 
+                    ? `${d1_1}+${d1_2}=${r1}+${p1Bonus} = ${finalR1}`
+                    : `${d1_1}+${d1_2}=${r1}`;
+                const result2Text = p2Bonus > 0 
+                    ? `${d2_1}+${d2_2}=${r2}+${p2Bonus} = ${finalR2}`
+                    : `${d2_1}+${d2_2}=${r2}`;
+                
+                $('duelResult1').innerText = result1Text;
+                $('duelResult2').innerText = result2Text;
+                $('duelRollBtn').classList.remove('animate-pulse');
+                $('duelRollBtn').innerText = 'OK';
+                this.pendingDuelResults = { p1, p2, finalR1, finalR2 };
+                $('duelRollBtn').onclick = () => {
+                    this.resolveDuel(this.pendingDuelResults.p1, this.pendingDuelResults.p2, 
+                                     this.pendingDuelResults.finalR1, this.pendingDuelResults.finalR2);
+                    this.pendingDuelResults = null;
+                };
+            };
             // Modal stays open, player can roll again
         }
     }
@@ -812,7 +935,8 @@ export class Game {
         $('btnLeft').disabled = !canMove;
         $('btnRight').disabled = !canMove;
         
-        $('skipBtn').disabled = !isMyTurn && this.state !== GAME_STATES.IDLE;
+        // Skip button: enabled when in MOVE state (can skip) or IDLE state (can skip without rolling)
+        $('skipBtn').disabled = this.state !== GAME_STATES.MOVE && this.state !== GAME_STATES.IDLE;
         $('digBtn').disabled = !isMyTurn;
     }
 
