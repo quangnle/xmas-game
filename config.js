@@ -26,16 +26,16 @@ export const TERRAIN_TYPES = {
 // Terrain Distribution (70% snow, 20% ice, 10% tree)
 export const TERRAIN_DISTRIBUTION = {
     SNOW_THRESHOLD: 0.7,
-    ICE_THRESHOLD: 0.9,
-    TREE_THRESHOLD: 1.0
+    ICE_THRESHOLD: 0.2,
+    TREE_THRESHOLD: 0.1
 };
 
 // Players Configuration
 export const PLAYERS_CONFIG = [
-    { id: 0, name: "Đỏ", color: '#ef4444', x: 0, y: 0 },
-    { id: 1, name: "Xanh Dương", color: '#3b82f6', x: GRID_SIZE - 1, y: 0 },
-    { id: 2, name: "Lục", color: '#22c55e', x: 0, y: GRID_SIZE - 1 },
-    { id: 3, name: "Vàng", color: '#eab308', x: GRID_SIZE - 1, y: GRID_SIZE - 1 }
+    { id: 0, name: "Red", color: '#ef4444', x: 0, y: 0 },
+    { id: 1, name: "Blue", color: '#3b82f6', x: GRID_SIZE - 1, y: 0 },
+    { id: 2, name: "Green", color: '#22c55e', x: 0, y: GRID_SIZE - 1 },
+    { id: 3, name: "Yellow", color: '#eab308', x: GRID_SIZE - 1, y: GRID_SIZE - 1 }
 ];
 
 // Game Items Configuration

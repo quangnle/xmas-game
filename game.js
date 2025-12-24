@@ -332,7 +332,7 @@ export class Game {
         if (this.state !== GAME_STATES.IDLE) return;
         
         $('rollBtn').disabled = true;
-        $('rollBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang tung...';
+        $('rollBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rolling...';
         
         // Animation effect
         let count = 0;
@@ -363,14 +363,14 @@ export class Game {
         // Check for extra turn (6 or 12)
         if (this.diceValue === 6 || this.diceValue === 12) {
             this.hasExtraTurn = true;
-            this.showToast(`🎉 Tung được ${this.diceValue}! Bạn được đi thêm 1 lượt nữa!`);
+            this.showToast(`🎉 Rolled ${this.diceValue}! You get an extra turn!`);
         } else {
             this.hasExtraTurn = false;
         }
         
         this.state = GAME_STATES.MOVE;
         this.updateButtons();
-        $('rollBtn').innerHTML = 'ĐÃ TUNG';
+        $('rollBtn').innerHTML = 'ROLLED';
         $('rollBtn').classList.add('opacity-50', 'cursor-not-allowed');
     }
 
@@ -422,7 +422,7 @@ export class Game {
         if (giftIdx !== -1) {
             this.gifts.splice(giftIdx, 1);
             p.coins += GIFT_VALUE;
-            this.showToast(`+${GIFT_VALUE} Xu! 💰`);
+            this.showToast(`+${GIFT_VALUE} Coins! 💰`);
             this.updateUI();
         }
 
@@ -433,7 +433,7 @@ export class Game {
                 p.inventory.push(snowman.treasureIndex);
                 this.showClueModal(snowman.treasureIndex);
             } else {
-                this.showToast("Bạn đã có manh mối này rồi!");
+                this.showToast("You already have this clue!");
             }
         }
 
@@ -494,26 +494,32 @@ export class Game {
             // Attacker wins
             p2.x = p2.startPos.x;
             p2.y = p2.startPos.y;
-            showModal('Kết quả Duel', `Người chơi ${p1.name} thắng! ${p2.name} về vị trí xuất phát.`);
+            showModal('Duel Result', `Player ${p1.name} wins! ${p2.name} returns to starting position.`);
+            
+            // Close modal and end duel
+            $('duelModal').classList.add('hidden');
+            this.centerCameraOnPlayer();
+            this.updateButtons();
+            this.state = GAME_STATES.MOVE;
         } else if (r2 > r1) {
             // Defender wins
             p1.x = p1.startPos.x;
             p1.y = p1.startPos.y;
-            showModal('Kết quả Duel', `Người chơi ${p2.name} thắng! ${p1.name} về vị trí xuất phát.`);
+            showModal('Duel Result', `Player ${p2.name} wins! ${p1.name} returns to starting position.`);
             this.currentMoves = 0;
             this.skipTurn();
+            
+            // Close modal and end duel
+            $('duelModal').classList.add('hidden');
+            this.centerCameraOnPlayer();
+            this.state = GAME_STATES.MOVE;
         } else {
-            showModal('Kết quả Duel', 'Hòa! Không ai bị di chuyển.');
+            // Tie - continue dueling by resetting and allowing another roll
+            $('duelResult1').innerText = '-';
+            $('duelResult2').innerText = '-';
+            this.showToast('Tie! Roll again!');
+            // Modal stays open, player can roll again
         }
-        
-        $('duelModal').classList.add('hidden');
-        this.centerCameraOnPlayer();
-        
-        if (r2 <= r1) {
-            this.updateButtons();
-        }
-        
-        this.state = GAME_STATES.MOVE;
     }
 
     /**
@@ -525,7 +531,7 @@ export class Game {
         
         if (treasure) {
             if (treasure.found) {
-                showModal('Tiếc quá', 'Kho báu này đã bị đào mất rồi!');
+                showModal('Too Bad', 'This treasure has already been dug up!');
                 // Đào hố trống - hết lượt di chuyển
                 this.currentMoves = 0;
                 $('movesLeft').innerText = '0';
@@ -535,16 +541,16 @@ export class Game {
                 treasure.found = true;
                 p.coins += treasure.value;
                 showModal(
-                    'KHO BÁU! 💎',
-                    `Chúc mừng! Bạn tìm thấy kho báu trị giá <span class="text-yellow-500 font-bold">${treasure.value}</span> xu!`
+                    'TREASURE! 💎',
+                    `Congratulations! You found a treasure worth <span class="text-yellow-500 font-bold">${treasure.value}</span> coins!`
                 );
                 this.treasures = this.treasures.filter(t => t !== treasure);
                 this.updateUI();
                 this.skipTurn();
             } else {
                 showModal(
-                    'Hừm...',
-                    'Có vẻ đất ở đây xốp, nhưng bạn không biết chắc có gì ở dưới. Hãy tìm Người Tuyết để lấy manh mối!'
+                    'Hmm...',
+                    'The ground here seems soft, but you\'re not sure what\'s underneath. Find a Snowman to get a clue!'
                 );
                 // Đào hố trống - hết lượt di chuyển
                 this.currentMoves = 0;
@@ -552,7 +558,7 @@ export class Game {
                 this.updateButtons();
             }
         } else {
-            showModal('Chẳng có gì', 'Bạn đào một cái hố nhưng chỉ thấy tuyết.');
+            showModal('Nothing Here', 'You dig a hole but only find snow.');
             // Đào hố trống - hết lượt di chuyển
             this.currentMoves = 0;
             $('movesLeft').innerText = '0';
@@ -576,10 +582,10 @@ export class Game {
             $('diceValue').innerText = '-';
             $('movesLeft').innerText = '0';
             $('rollBtn').disabled = false;
-            $('rollBtn').innerHTML = '<i class="fas fa-dice"></i> TUNG XÚC SẮC (Lượt thêm)';
+            $('rollBtn').innerHTML = '<i class="fas fa-dice"></i> ROLL DICE (Extra Turn)';
             $('rollBtn').classList.remove('opacity-50', 'cursor-not-allowed');
             
-            this.showToast('🎁 Lượt thêm của bạn!');
+            this.showToast('🎁 Your extra turn!');
             this.updateButtons();
             return; // Don't change player
         }
@@ -595,7 +601,7 @@ export class Game {
         $('diceValue').innerText = '-';
         $('movesLeft').innerText = '0';
         $('rollBtn').disabled = false;
-        $('rollBtn').innerHTML = '<i class="fas fa-dice"></i> TUNG XÚC SẮC';
+        $('rollBtn').innerHTML = '<i class="fas fa-dice"></i> ROLL DICE';
         $('rollBtn').classList.remove('opacity-50', 'cursor-not-allowed');
         
         this.updateUI();
@@ -603,7 +609,7 @@ export class Game {
         
         // Show turn indicator
         const p = this.players[this.currentPlayerIndex];
-        $('actionMessage').innerText = `Lượt của ${p.name}`;
+        $('actionMessage').innerText = `${p.name}'s turn`;
         $('actionMessage').style.color = p.color;
         $('actionOverlay').classList.remove('hidden');
         setTimeout(() => $('actionOverlay').classList.add('hidden'), 1500);
@@ -718,13 +724,13 @@ export class Game {
     showClueModal(tIdx) {
         const imgData = this.createSnapshot(tIdx);
         const html = `
-            <p class="mb-4">Người tuyết thì thầm một vị trí bí mật...</p>
+            <p class="mb-4">The snowman whispers a secret location...</p>
             <div class="border-4 border-yellow-500 inline-block p-1 bg-white">
                 <img src="${imgData}" class="w-48 h-48 pixel-font">
             </div>
-            <p class="mt-2 text-sm text-gray-500">Đã lưu vào túi đồ!</p>
+            <p class="mt-2 text-sm text-gray-500">Saved to inventory!</p>
         `;
-        showModal('Manh Mối Kho Báu #' + (tIdx + 1), html);
+        showModal('Treasure Clue #' + (tIdx + 1), html);
     }
 
     /**
@@ -742,14 +748,14 @@ export class Game {
         list.innerHTML = '';
         
         if (p.inventory.length === 0) {
-            list.innerHTML = '<p class="text-gray-400 col-span-2 text-center">Chưa có manh mối nào.</p>';
+            list.innerHTML = '<p class="text-gray-400 col-span-2 text-center">No clues yet.</p>';
         } else {
             p.inventory.forEach(idx => {
                 const imgData = this.createSnapshot(idx);
                 const tInfo = this.treasures.find(t => t.index === idx);
                 const status = (!tInfo || tInfo.found)
-                    ? '<span class="text-green-400">(Đã tìm thấy)</span>'
-                    : '<span class="text-red-400">(Chưa đào)</span>';
+                    ? '<span class="text-green-400">(Found)</span>'
+                    : '<span class="text-red-400">(Not dug)</span>';
                 
                 const item = document.createElement('div');
                 item.className = 'bg-slate-800 p-6 rounded-lg border border-slate-600';
@@ -759,9 +765,9 @@ export class Game {
                             <img src="${imgData}" class="w-64 h-64 border border-gray-500 bg-white object-contain">
                         </div>
                         <div class="text-center">
-                            <h4 class="font-bold text-yellow-400 text-lg mb-2">Manh mối #${idx + 1}</h4>
+                            <h4 class="font-bold text-yellow-400 text-lg mb-2">Clue #${idx + 1}</h4>
                             <p class="text-sm text-gray-300 mb-1">${status}</p>
-                            <p class="text-xs text-gray-500">Hãy tìm địa hình giống ảnh này.</p>
+                            <p class="text-xs text-gray-500">Find terrain that matches this image.</p>
                         </div>
                     </div>
                 `;
@@ -805,12 +811,16 @@ export class Game {
 
     /**
      * Fit entire map to screen (for initial view)
-     * Start from top-left corner to show full map view
+     * Center the map on screen
      */
     fitMapToScreen() {
-        // Start from top-left corner (0,0) to show full map
-        this.camera.x = 0;
-        this.camera.y = 0;
+        // Center the map on screen to show full map view
+        const mapWidth = GRID_SIZE * CELL_SIZE;
+        const mapHeight = GRID_SIZE * CELL_SIZE;
+        
+        // Center camera to show map in the middle
+        this.camera.x = (mapWidth - this.canvas.width) / 2;
+        this.camera.y = (mapHeight - this.canvas.height) / 2;
         
         // Ensure camera stays within bounds
         this.clampCamera();
