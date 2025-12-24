@@ -41,6 +41,15 @@ export class Game {
         this.camera = { x: 0, y: 0 };
         this.hasExtraTurn = false; // Flag for extra turn when rolling 6 or 12
         
+        // Mouse drag state for panning
+        this.isDragging = false;
+        this.lastMouseX = 0;
+        this.lastMouseY = 0;
+        this.cameraFollowEnabled = true; // Enable camera auto-follow by default
+        
+        // Animation time for effects
+        this.animationTime = 0;
+        
         // Game objects
         this.snowmen = [];      // {x, y, treasureIndex}
         this.treasures = [];    // {x, y, value, found, index}
@@ -49,6 +58,7 @@ export class Game {
         this.initializeCanvas();
         this.init();
         this.setupControls();
+        this.setupMousePan();
         this.loop();
     }
 
@@ -219,6 +229,99 @@ export class Game {
             if (keyMap[e.key]) {
                 keyMap[e.key]();
             }
+        });
+    }
+
+    /**
+     * Setup mouse drag to pan camera
+     */
+    setupMousePan() {
+        this.canvas.addEventListener('mousedown', (e) => {
+            this.isDragging = true;
+            this.cameraFollowEnabled = false; // Disable auto-follow when manually panning
+            this.lastMouseX = e.clientX;
+            this.lastMouseY = e.clientY;
+            this.canvas.style.cursor = 'grabbing';
+            e.preventDefault();
+        });
+
+        this.canvas.addEventListener('mousemove', (e) => {
+            if (this.isDragging) {
+                const deltaX = e.clientX - this.lastMouseX;
+                const deltaY = e.clientY - this.lastMouseY;
+                
+                // Move camera in opposite direction of mouse movement
+                this.camera.x -= deltaX;
+                this.camera.y -= deltaY;
+                
+                // Clamp camera to bounds
+                this.clampCamera();
+                
+                this.lastMouseX = e.clientX;
+                this.lastMouseY = e.clientY;
+                e.preventDefault();
+            } else {
+                // Change cursor on hover when not dragging
+                this.canvas.style.cursor = 'grab';
+            }
+        });
+
+        const handleMouseUp = () => {
+            if (this.isDragging) {
+                this.isDragging = false;
+                this.canvas.style.cursor = 'grab';
+            }
+        };
+
+        this.canvas.addEventListener('mouseup', handleMouseUp);
+        
+        // Also handle mouseup outside canvas
+        document.addEventListener('mouseup', handleMouseUp);
+
+        this.canvas.addEventListener('mouseleave', () => {
+            if (this.isDragging) {
+                this.isDragging = false;
+            }
+            this.canvas.style.cursor = 'default';
+        });
+
+        // Touch support for mobile
+        let touchStartX = 0;
+        let touchStartY = 0;
+        
+        this.canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                this.isDragging = true;
+                this.cameraFollowEnabled = false; // Disable auto-follow when manually panning
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                e.preventDefault();
+            }
+        });
+
+        this.canvas.addEventListener('touchmove', (e) => {
+            if (this.isDragging && e.touches.length === 1) {
+                const deltaX = e.touches[0].clientX - touchStartX;
+                const deltaY = e.touches[0].clientY - touchStartY;
+                
+                this.camera.x -= deltaX;
+                this.camera.y -= deltaY;
+                
+                this.clampCamera();
+                
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                e.preventDefault();
+            }
+        });
+
+        this.canvas.addEventListener('touchend', () => {
+            this.isDragging = false;
+        });
+
+        // Also handle touch cancel
+        this.canvas.addEventListener('touchcancel', () => {
+            this.isDragging = false;
         });
     }
 
@@ -695,6 +798,9 @@ export class Game {
         
         // Clamp to bounds to prevent showing empty space
         this.clampCamera();
+        
+        // Re-enable camera follow when centering on player (e.g., when player moves)
+        this.cameraFollowEnabled = true;
     }
 
     /**
@@ -834,10 +940,32 @@ export class Game {
             this.ctx.lineWidth = 2;
             this.ctx.stroke();
 
-            // Active indicator
+            // Active indicator with pulsing effect
             if (idx === this.currentPlayerIndex) {
+                // Calculate pulsing effect using sin wave (0 to 1 range) - much faster animation
+                const pulse = (Math.sin(this.animationTime * 0.06) + 1) / 2; // 0 to 1, much faster with 0.06
+                
+                // Outer glow effect with pulsing opacity and size - very bright and prominent
+                const glowRadius = 18 + pulse * 8; // Pulse between 18 and 26 (even larger range)
+                const glowAlpha = 0.8 + pulse * 0.2; // Pulse opacity between 0.8 and 1.0 (very bright)
+                
+                // Draw outer glow - very bright and very thick
+                this.ctx.strokeStyle = `rgba(250, 204, 21, ${glowAlpha})`; // yellow with alpha
+                this.ctx.lineWidth = 6 + pulse * 4; // Pulse line width between 6 and 10 (very thick)
+                this.ctx.beginPath();
+                this.ctx.arc(px, py, glowRadius, 0, Math.PI * 2);
+                this.ctx.stroke();
+                
+                // Draw middle glow layer for extra visibility
+                this.ctx.strokeStyle = `rgba(250, 230, 100, ${0.9 + pulse * 0.1})`; // lighter yellow
+                this.ctx.lineWidth = 5;
+                this.ctx.beginPath();
+                this.ctx.arc(px, py, 19 + pulse * 2, 0, Math.PI * 2);
+                this.ctx.stroke();
+                
+                // Draw inner bright ring - very thick for maximum visibility
                 this.ctx.strokeStyle = '#facc15'; // yellow
-                this.ctx.lineWidth = 3;
+                this.ctx.lineWidth = 5; // Increased to 5
                 this.ctx.beginPath();
                 this.ctx.arc(px, py, 18, 0, Math.PI * 2);
                 this.ctx.stroke();
@@ -854,16 +982,21 @@ export class Game {
      * Main game loop
      */
     loop() {
-        // Smooth camera follow with bounds clamping
-        const p = this.players[this.currentPlayerIndex];
-        const targetX = p.x * CELL_SIZE - this.canvas.width / 2 + CELL_SIZE / 2;
-        const targetY = p.y * CELL_SIZE - this.canvas.height / 2 + CELL_SIZE / 2;
+        // Update animation time for effects
+        this.animationTime += 1;
         
-        this.camera.x += (targetX - this.camera.x) * CAMERA_CONFIG.LERP_SPEED;
-        this.camera.y += (targetY - this.camera.y) * CAMERA_CONFIG.LERP_SPEED;
-        
-        // Clamp camera to prevent showing empty space
-        this.clampCamera();
+        // Smooth camera follow with bounds clamping (only when follow is enabled and not dragging)
+        if (this.cameraFollowEnabled && !this.isDragging) {
+            const p = this.players[this.currentPlayerIndex];
+            const targetX = p.x * CELL_SIZE - this.canvas.width / 2 + CELL_SIZE / 2;
+            const targetY = p.y * CELL_SIZE - this.canvas.height / 2 + CELL_SIZE / 2;
+            
+            this.camera.x += (targetX - this.camera.x) * CAMERA_CONFIG.LERP_SPEED;
+            this.camera.y += (targetY - this.camera.y) * CAMERA_CONFIG.LERP_SPEED;
+            
+            // Clamp camera to prevent showing empty space
+            this.clampCamera();
+        }
 
         this.render();
         requestAnimationFrame(() => this.loop());

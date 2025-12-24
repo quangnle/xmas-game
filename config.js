@@ -10,7 +10,7 @@ export const CELL_SIZE = 40; // Pixels per cell
 export const COLORS = {
     snow: '#f8fafc',      // Value 1 - Snow terrain
     ice: '#bae6fd',       // Value 2 - Ice terrain
-    tree: '#dcfce7',      // Value 3 - Tree terrain
+    tree: '#16a34a',      // Value 3 - Tree terrain (much darker green)
     gridLine: '#e2e8f0',
     highlight: 'rgba(250, 204, 21, 0.4)',
     background: '#0f172a'  // bg-slate-900
