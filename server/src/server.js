@@ -80,6 +80,11 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Get lobby list
+    socket.on('lobby:list', () => {
+        lobbyHandler.handleGetLobbyList(socket);
+    });
+
     // Game Actions
     socket.on('game:rollDice', ({ gameId, playerName }) => {
         gameHandler.handleRollDice(socket, gameId, playerName);

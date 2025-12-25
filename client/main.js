@@ -27,12 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Listen for game start
     window.addEventListener('game:started', (event) => {
-        const { gameId, gameState } = event.detail;
+        const { gameId, gameState, lobbyCode } = event.detail;
         const playerName = lobbyManager.getPlayerName();
         
         // Initialize game client
         gameClient = new GameClient(socketClient, playerName);
-        gameClient.initGame(gameId, gameState);
+        gameClient.initGame(gameId, gameState, lobbyCode);
     });
 
     // Handle socket connection

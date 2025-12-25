@@ -162,7 +162,7 @@ export class GameRenderer {
     /**
      * Render game state
      * @param {Object} gameState - Game state from server
-     * @param {string} currentPlayerName - Current player name
+     * @param {string} currentPlayerName - Current player name (my player)
      */
     render(gameState, currentPlayerName) {
         if (!gameState || !gameState.grid) return;
@@ -186,8 +186,8 @@ export class GameRenderer {
         // Draw objects
         this.renderObjects(gameState);
         
-        // Draw players
-        this.renderPlayers(gameState.players, currentPlayerName);
+        // Draw players (pass currentPlayerIndex from gameState and myPlayerName)
+        this.renderPlayers(gameState.players, gameState.currentPlayerIndex, currentPlayerName);
 
         this.ctx.restore();
     }
@@ -278,15 +278,18 @@ export class GameRenderer {
 
     /**
      * Render players
+     * @param {Array} players - Array of players
+     * @param {number} currentPlayerIndex - Index of player whose turn it is
+     * @param {string} myPlayerName - Name of the current user's player
      */
-    renderPlayers(players, currentPlayerName) {
+    renderPlayers(players, currentPlayerIndex, myPlayerName) {
         if (!players) return;
-
-        const currentPlayerIndex = players.findIndex(p => p.name === currentPlayerName);
 
         players.forEach((p, idx) => {
             const px = p.x * CELL_SIZE + CELL_SIZE / 2;
             const py = p.y * CELL_SIZE + CELL_SIZE / 2;
+            const isCurrentTurn = idx === currentPlayerIndex;
+            const isMyPlayer = p.name === myPlayerName;
             
             // Shadow
             this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -300,30 +303,44 @@ export class GameRenderer {
             this.ctx.arc(px, py, 14, 0, Math.PI * 2);
             this.ctx.fill();
             
-            // Border
+            // Base border (white)
             this.ctx.strokeStyle = '#fff';
             this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, 14, 0, Math.PI * 2);
             this.ctx.stroke();
 
-            // Active indicator with pulsing effect
-            if (idx === currentPlayerIndex) {
+            // My player border (thicker, always visible)
+            if (isMyPlayer) {
+                this.ctx.strokeStyle = '#3b82f6'; // Blue border for my player
+                this.ctx.lineWidth = 4;
+                this.ctx.beginPath();
+                this.ctx.arc(px, py, 16, 0, Math.PI * 2);
+                this.ctx.stroke();
+            }
+
+            // Current turn indicator (pulsing yellow glow)
+            if (isCurrentTurn) {
                 const pulse = (Math.sin(this.animationTime * 0.06) + 1) / 2;
                 
                 const glowRadius = 18 + pulse * 8;
                 const glowAlpha = 0.8 + pulse * 0.2;
                 
+                // Outer glow
                 this.ctx.strokeStyle = `rgba(250, 204, 21, ${glowAlpha})`;
                 this.ctx.lineWidth = 6 + pulse * 4;
                 this.ctx.beginPath();
                 this.ctx.arc(px, py, glowRadius, 0, Math.PI * 2);
                 this.ctx.stroke();
                 
+                // Middle glow
                 this.ctx.strokeStyle = `rgba(250, 230, 100, ${0.9 + pulse * 0.1})`;
                 this.ctx.lineWidth = 5;
                 this.ctx.beginPath();
                 this.ctx.arc(px, py, 19 + pulse * 2, 0, Math.PI * 2);
                 this.ctx.stroke();
                 
+                // Inner bright ring
                 this.ctx.strokeStyle = '#facc15';
                 this.ctx.lineWidth = 5;
                 this.ctx.beginPath();
@@ -343,20 +360,20 @@ export class GameRenderer {
     /**
      * Main render loop
      * @param {Object} gameState - Game state from server
-     * @param {string} currentPlayerName - Current player name
+     * @param {string} myPlayerName - Current user's player name (for camera follow and my player border)
      */
-    loop(gameState, currentPlayerName) {
+    loop(gameState, myPlayerName) {
         this.animationTime += 1;
         
-        // Smooth camera follow
+        // Smooth camera follow (follow my player)
         if (this.cameraFollowEnabled && !this.isDragging && gameState && gameState.players) {
-            const currentPlayer = gameState.players.find(p => p.name === currentPlayerName);
-            if (currentPlayer) {
-                this.centerCameraOnPlayer(currentPlayer);
+            const myPlayer = gameState.players.find(p => p.name === myPlayerName);
+            if (myPlayer) {
+                this.centerCameraOnPlayer(myPlayer);
             }
         }
 
-        this.render(gameState, currentPlayerName);
+        this.render(gameState, myPlayerName);
     }
 }
 

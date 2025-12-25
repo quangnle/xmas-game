@@ -250,6 +250,27 @@ export class LobbyHandler {
     }
 
     /**
+     * Handle get lobby list
+     * @param {Object} socket - Socket.io socket
+     */
+    handleGetLobbyList(socket) {
+        const allLobbies = this.lobbyStorage.getAllLobbies();
+        
+        // Return only public info (no sensitive data)
+        const publicLobbies = allLobbies
+            .filter(lobby => lobby.status === 'WAITING') // Only show waiting lobbies
+            .map(lobby => ({
+                code: lobby.code,
+                playerCount: lobby.players.length,
+                maxPlayers: lobby.settings.maxPlayers,
+                hostName: lobby.hostName,
+                status: lobby.status
+            }));
+        
+        socket.emit('lobby:list', publicLobbies);
+    }
+
+    /**
      * Send error to socket
      * @param {Object} socket - Socket.io socket
      * @param {string} message - Error message

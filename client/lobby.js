@@ -26,13 +26,13 @@ export class LobbyManager {
             const lobbyHTML = `
                 <div id="lobbyScreen" class="fixed inset-0 bg-slate-900 z-50 flex items-center justify-center p-4">
                     <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-                        <!-- Create/Join Tabs -->
+                        <!-- Create/Browse Tabs -->
                         <div class="flex gap-2 mb-6 border-b">
                             <button id="createTab" class="flex-1 py-2 px-4 font-bold text-blue-600 border-b-2 border-blue-600">
                                 Create Lobby
                             </button>
-                            <button id="joinTab" class="flex-1 py-2 px-4 font-bold text-gray-500 hover:text-gray-700">
-                                Join Lobby
+                            <button id="browseTab" class="flex-1 py-2 px-4 font-bold text-gray-500 hover:text-gray-700">
+                                Browse Rooms
                             </button>
                         </div>
 
@@ -50,24 +50,30 @@ export class LobbyManager {
                             </button>
                         </div>
 
-                        <!-- Join Lobby Form -->
-                        <div id="joinForm" class="space-y-4 hidden">
-                            <div>
+                        <!-- Browse Rooms -->
+                        <div id="browseForm" class="space-y-4 hidden">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-bold text-gray-800">Available Rooms</h3>
+                                <button id="refreshRoomsBtn" 
+                                    class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm font-bold">
+                                    <i class="fas fa-sync-alt"></i> Refresh
+                                </button>
+                            </div>
+                            
+                            <!-- Name Input for Joining -->
+                            <div class="mb-4">
                                 <label class="block text-sm font-bold text-gray-700 mb-2">Your Name</label>
                                 <input type="text" id="joinNameInput" 
                                     class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                                     placeholder="Enter your name" maxlength="20">
                             </div>
-                            <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-2">Lobby Code</label>
-                                <input type="text" id="lobbyCodeInput" 
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-2xl font-bold tracking-widest text-gray-900 bg-white"
-                                    placeholder="000000" maxlength="6" pattern="[0-9]{6}">
+
+                            <!-- Rooms List -->
+                            <div id="roomsList" class="space-y-2 max-h-64 overflow-y-auto">
+                                <div class="text-center text-gray-500 py-4">
+                                    <i class="fas fa-spinner fa-spin"></i> Loading rooms...
+                                </div>
                             </div>
-                            <button id="joinBtn" 
-                                class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-500 transition">
-                                Join Lobby
-                            </button>
                         </div>
 
                         <!-- Error Message -->
@@ -111,11 +117,14 @@ export class LobbyManager {
 
         // Setup event listeners
         $('createTab').addEventListener('click', () => this.showCreateForm());
-        $('joinTab').addEventListener('click', () => this.showJoinForm());
+        $('browseTab').addEventListener('click', () => this.showBrowseForm());
         $('createBtn').addEventListener('click', () => this.handleCreate());
-        $('joinBtn').addEventListener('click', () => this.handleJoin());
+        $('refreshRoomsBtn').addEventListener('click', () => this.refreshRoomsList());
         $('leaveLobbyBtn').addEventListener('click', () => this.handleLeave());
         $('startGameBtn').addEventListener('click', () => this.handleStartGame());
+        
+        // Initialize rooms list
+        this.roomsList = [];
     }
 
     /**
@@ -168,14 +177,24 @@ export class LobbyManager {
             if (gameContainer) {
                 gameContainer.classList.remove('hidden');
             }
-            // Emit event for game manager to handle
+            // Emit event for game manager to handle (include lobby code)
             window.dispatchEvent(new CustomEvent('game:started', { 
-                detail: { gameId, gameState } 
+                detail: { 
+                    gameId, 
+                    gameState,
+                    lobbyCode: this.currentLobby?.code || null
+                } 
             }));
         });
 
         this.socket.on('lobby:error', ({ message }) => {
             this.showError(message);
+        });
+
+        // Lobby list
+        this.socket.on('lobby:list', (lobbies) => {
+            this.roomsList = lobbies;
+            this.updateRoomsList();
         });
     }
 
@@ -184,23 +203,24 @@ export class LobbyManager {
      */
     showCreateForm() {
         $('createForm').classList.remove('hidden');
-        $('joinForm').classList.add('hidden');
+        $('browseForm').classList.add('hidden');
         $('createTab').classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
         $('createTab').classList.remove('text-gray-500');
-        $('joinTab').classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
-        $('joinTab').classList.add('text-gray-500');
+        $('browseTab').classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
+        $('browseTab').classList.add('text-gray-500');
     }
 
     /**
-     * Show join form
+     * Show browse form
      */
-    showJoinForm() {
+    showBrowseForm() {
         $('createForm').classList.add('hidden');
-        $('joinForm').classList.remove('hidden');
-        $('joinTab').classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
-        $('joinTab').classList.remove('text-gray-500');
+        $('browseForm').classList.remove('hidden');
+        $('browseTab').classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
+        $('browseTab').classList.remove('text-gray-500');
         $('createTab').classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
         $('createTab').classList.add('text-gray-500');
+        this.refreshRoomsList();
     }
 
     /**
@@ -216,25 +236,6 @@ export class LobbyManager {
         this.socket.emit('lobby:create', { hostName: name });
     }
 
-    /**
-     * Handle join lobby
-     */
-    handleJoin() {
-        const name = $('joinNameInput').value.trim();
-        const code = $('lobbyCodeInput').value.trim();
-        
-        if (!name) {
-            this.showError('Please enter your name');
-            return;
-        }
-        if (!code || code.length !== 6) {
-            this.showError('Please enter a valid 6-digit lobby code');
-            return;
-        }
-        
-        this.playerName = name;
-        this.socket.emit('lobby:join', { lobbyCode: code, playerName: name });
-    }
 
     /**
      * Handle leave lobby
@@ -344,6 +345,70 @@ export class LobbyManager {
                 playerName: this.playerName 
             });
         }
+    }
+
+    /**
+     * Refresh rooms list
+     */
+    refreshRoomsList() {
+        this.socket.emit('lobby:list');
+    }
+
+    /**
+     * Update rooms list UI
+     */
+    updateRoomsList() {
+        const roomsListEl = $('roomsList');
+        if (!roomsListEl) return;
+
+        if (this.roomsList.length === 0) {
+            roomsListEl.innerHTML = `
+                <div class="text-center text-gray-500 py-4">
+                    <i class="fas fa-inbox text-2xl mb-2"></i>
+                    <p>No rooms available</p>
+                </div>
+            `;
+            return;
+        }
+
+        roomsListEl.innerHTML = this.roomsList.map(room => {
+            const isFull = room.playerCount >= room.maxPlayers;
+            return `
+                <div class="border border-gray-300 rounded-lg p-3 hover:bg-gray-50 transition ${isFull ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}" 
+                     ${!isFull ? `onclick="window.lobbyManager.joinRoomByCode('${room.code}')"` : ''}>
+                    <div class="flex justify-between items-center">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="font-mono font-bold text-blue-600 text-lg">${room.code}</span>
+                                ${isFull ? '<span class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded">Full</span>' : ''}
+                            </div>
+                            <div class="text-sm text-gray-600">
+                                Host: <span class="font-semibold">${room.hostName}</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm font-bold text-gray-700">
+                                ${room.playerCount}/${room.maxPlayers}
+                            </div>
+                            <div class="text-xs text-gray-500">Players</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    /**
+     * Join room by code
+     */
+    joinRoomByCode(code) {
+        const name = $('joinNameInput').value.trim();
+        if (!name) {
+            this.showError('Please enter your name first');
+            return;
+        }
+        this.playerName = name;
+        this.socket.emit('lobby:join', { lobbyCode: code, playerName: name });
     }
 
     /**

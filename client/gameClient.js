@@ -118,10 +118,12 @@ export class GameClient {
      * Initialize game
      * @param {string} gameId - Game ID
      * @param {Object} gameState - Initial game state
+     * @param {string} [lobbyCode] - Lobby code
      */
-    initGame(gameId, gameState) {
+    initGame(gameId, gameState, lobbyCode = null) {
         this.gameId = gameId;
         this.gameState = gameState;
+        this.lobbyCode = lobbyCode;
         this.updateUI();
     }
 
@@ -230,12 +232,20 @@ export class GameClient {
         if (diceEl) diceEl.textContent = this.gameState.diceValue || '-';
         if (movesEl) movesEl.textContent = this.gameState.currentMoves || 0;
 
-        // Update current player
+        // Update current player - show "Your Turn" if it's my turn
         const turnEl = $('turnIndicator');
         if (turnEl) {
             const currentPlayer = this.gameState.players?.[this.gameState.currentPlayerIndex];
             if (currentPlayer) {
-                turnEl.textContent = currentPlayer.name || '';
+                if (currentPlayer.name === this.playerName) {
+                    turnEl.textContent = 'Your Turn';
+                    turnEl.classList.add('text-yellow-400');
+                    turnEl.classList.remove('text-white');
+                } else {
+                    turnEl.textContent = currentPlayer.name || '';
+                    turnEl.classList.add('text-white');
+                    turnEl.classList.remove('text-yellow-400');
+                }
             } else {
                 turnEl.textContent = '';
             }
@@ -246,6 +256,12 @@ export class GameClient {
         if (player) {
             const coinEl = $('coinDisplay');
             if (coinEl) coinEl.innerHTML = `<i class="fas fa-coins"></i> ${player.coins || 0}`;
+        }
+
+        // Update lobby code
+        const lobbyCodeEl = $('lobbyCodeHeader');
+        if (lobbyCodeEl && this.lobbyCode) {
+            lobbyCodeEl.textContent = this.lobbyCode;
         }
 
         // Update buttons
