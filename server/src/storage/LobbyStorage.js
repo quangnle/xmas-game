@@ -16,11 +16,22 @@ export class LobbyStorage {
      * Create a new lobby
      * @param {string} hostName - Host player name
      * @param {string} hostSocketId - Host socket ID
+     * @param {string} [customCode] - Optional custom room code (must be unique)
      * @returns {import('../core/LobbyState.js').LobbyState} Created lobby
      */
-    createLobby(hostName, hostSocketId) {
+    createLobby(hostName, hostSocketId, customCode = null) {
         const lobbyId = `lobby-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        const code = this.generateLobbyCode();
+        let code;
+        
+        if (customCode) {
+            // Check if code already exists
+            if (this.getLobbyByCode(customCode)) {
+                throw new Error('Room code already exists');
+            }
+            code = customCode;
+        } else {
+            code = this.generateLobbyCode();
+        }
         
         const lobby = {
             lobbyId,

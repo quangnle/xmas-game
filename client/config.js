@@ -33,3 +33,19 @@ export const CAMERA_CONFIG = {
 };
 
 export const SERVER_URL = 'http://localhost:3000';
+
+// Snapshot Configuration (for clue images)
+export const SNAPSHOT_CONFIG = {
+    RANGE: 5,
+    CANVAS_SIZE: 200,
+    CELL_SIZE: 20
+};
+
+// Gift value
+export const GIFT_VALUE = 10;
+
+// Weapons config
+export const WEAPONS = {
+    KNIFE: { emoji: '🔪', bonus: 2, name: 'Knife' },
+    SWORD: { emoji: '🗡️', bonus: 3, name: 'Sword' }
+};

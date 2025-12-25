@@ -35,8 +35,9 @@ export class LobbyHandler {
      * Handle create lobby
      * @param {Object} socket - Socket.io socket
      * @param {string} hostName - Host player name
+     * @param {string} [roomCode] - Optional custom room code
      */
-    handleCreateLobby(socket, hostName) {
+    handleCreateLobby(socket, hostName, roomCode = null) {
         // Validate host name
         const validation = validatePlayerName(hostName);
         if (!validation.valid) {
@@ -44,14 +45,27 @@ export class LobbyHandler {
             return;
         }
         
-        // Create lobby
-        const lobby = this.lobbyStorage.createLobby(hostName, socket.id);
+        // Validate room code if provided
+        if (roomCode) {
+            const codeValidation = validateLobbyCode(roomCode);
+            if (!codeValidation.valid) {
+                this.sendError(socket, codeValidation.error);
+                return;
+            }
+        }
         
-        // Join socket room
-        socket.join(lobby.lobbyId);
-        
-        // Send lobby data to host
-        socket.emit('lobby:created', lobby);
+        try {
+            // Create lobby with optional custom code
+            const lobby = this.lobbyStorage.createLobby(hostName, socket.id, roomCode);
+            
+            // Join socket room
+            socket.join(lobby.lobbyId);
+            
+            // Send lobby data to host
+            socket.emit('lobby:created', lobby);
+        } catch (error) {
+            this.sendError(socket, error.message || 'Failed to create room');
+        }
     }
 
     /**

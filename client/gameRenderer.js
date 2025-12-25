@@ -160,6 +160,24 @@ export class GameRenderer {
     }
 
     /**
+     * Get canvas position from grid coordinates
+     * @param {number} gridX - Grid X coordinate
+     * @param {number} gridY - Grid Y coordinate
+     * @returns {{x: number, y: number}} Canvas position
+     */
+    getCanvasPosition(gridX, gridY) {
+        const canvasX = gridX * CELL_SIZE + CELL_SIZE / 2 - this.camera.x;
+        const canvasY = gridY * CELL_SIZE + CELL_SIZE / 2 - this.camera.y;
+        
+        // Get canvas bounding rect for absolute position
+        const rect = this.canvas.getBoundingClientRect();
+        return {
+            x: rect.left + canvasX,
+            y: rect.top + canvasY
+        };
+    }
+
+    /**
      * Render game state
      * @param {Object} gameState - Game state from server
      * @param {string} currentPlayerName - Current player name (my player)

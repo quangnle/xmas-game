@@ -5,19 +5,14 @@
 
 import { SocketClient } from './socket.js';
 import { GameRenderer } from './gameRenderer.js';
-import { $, showModal } from './utils.js';
+import { $, showModal, showToast } from './utils.js';
+import { SNAPSHOT_CONFIG, GRID_SIZE, CELL_SIZE, TERRAIN_TYPES, COLORS, GIFT_VALUE, WEAPONS } from './config.js';
 
 // Game states
 const GAME_STATES = {
     IDLE: 'IDLE',
     MOVE: 'MOVE',
     DUEL: 'DUEL'
-};
-
-// Weapons config
-const WEAPONS = {
-    KNIFE: { emoji: '🔪', bonus: 2, name: 'Knife' },
-    SWORD: { emoji: '🗡️', bonus: 3, name: 'Sword' }
 };
 
 export class GameClient {
@@ -63,6 +58,68 @@ export class GameClient {
 
         this.socket.on('game:duel:resolved', (result) => {
             this.showDuelResult(result);
+        });
+
+        // Game events
+        this.socket.on('game:extraTurn', ({ playerName, diceValue }) => {
+            if (playerName === this.playerName) {
+                showToast(`🎉 Rolled ${diceValue}! You get an extra turn!`);
+            }
+        });
+
+        this.socket.on('game:event:gift', ({ playerName, value, position }) => {
+            if (playerName === this.playerName) {
+                // Show toast at player position
+                const player = this.gameState?.players?.find(p => p.name === playerName);
+                if (player && this.renderer) {
+                    const canvasPos = this.renderer.getCanvasPosition(player.x, player.y);
+                    showToast(`+${value || GIFT_VALUE} Coins! 💰`, { position: canvasPos });
+                } else {
+                    showToast(`+${value || GIFT_VALUE} Coins! 💰`);
+                }
+            }
+        });
+
+        this.socket.on('game:event:weapon', ({ playerName, weaponType, position }) => {
+            if (playerName === this.playerName) {
+                const weapon = WEAPONS[weaponType];
+                if (weapon) {
+                    const player = this.gameState?.players?.find(p => p.name === playerName);
+                    if (player && this.renderer) {
+                        const canvasPos = this.renderer.getCanvasPosition(player.x, player.y);
+                        showToast(`Picked up ${weapon.emoji} ${weapon.name}! +${weapon.bonus} in duels!`, { position: canvasPos });
+                    } else {
+                        showToast(`Picked up ${weapon.emoji} ${weapon.name}! +${weapon.bonus} in duels!`);
+                    }
+                }
+            }
+        });
+
+        this.socket.on('game:event:clue', ({ playerName, treasureIndex }) => {
+            if (playerName === this.playerName) {
+                this.showClueModal(treasureIndex);
+            }
+        });
+
+        this.socket.on('game:event:treasure', ({ playerName, value, coins }) => {
+            if (playerName === this.playerName) {
+                showModal(
+                    'TREASURE! 💎',
+                    `Congratulations! You found a treasure worth <span class="text-yellow-500 font-bold">${value}</span> coins!`
+                );
+            }
+        });
+
+        this.socket.on('game:event:digEmpty', ({ playerName, message }) => {
+            if (playerName === this.playerName) {
+                showModal('Nothing Here', message);
+            }
+        });
+
+        this.socket.on('game:event:digNoClue', ({ playerName, message }) => {
+            if (playerName === this.playerName) {
+                showModal('Hmm...', message);
+            }
         });
     }
 
@@ -256,6 +313,14 @@ export class GameClient {
         if (player) {
             const coinEl = $('coinDisplay');
             if (coinEl) coinEl.innerHTML = `<i class="fas fa-coins"></i> ${player.coins || 0}`;
+            
+            // Update inventory count
+            const invCount = player.inventory?.length || 0;
+            const invCountEl = $('inventoryCount');
+            if (invCountEl) {
+                invCountEl.textContent = invCount;
+                invCountEl.classList.toggle('hidden', invCount === 0);
+            }
         }
 
         // Update lobby code
@@ -389,8 +454,27 @@ export class GameClient {
         // Clues
         if (player.inventory && player.inventory.length > 0) {
             html += '<div class="text-white mb-4"><h3 class="font-bold text-xl mb-2">Clues</h3>';
-            player.inventory.forEach(clue => {
-                html += `<div class="bg-gray-800 p-3 rounded mb-2">Clue ${clue + 1}</div>`;
+            player.inventory.forEach(clueIdx => {
+                const imgData = this.createSnapshot(clueIdx);
+                const treasure = this.gameState.treasures?.find(t => t.index === clueIdx);
+                const status = (!treasure || treasure.found)
+                    ? '<span class="text-green-400">(Found)</span>'
+                    : '<span class="text-red-400">(Not dug)</span>';
+                
+                html += `
+                    <div class="bg-slate-800 p-6 rounded-lg border border-slate-600 mb-4">
+                        <div class="flex flex-col items-center gap-4">
+                            <div class="border-4 border-yellow-500 p-2 bg-white rounded-lg shadow-lg">
+                                <img src="${imgData}" class="w-64 h-64 border border-gray-500 bg-white object-contain">
+                            </div>
+                            <div class="text-center">
+                                <h4 class="font-bold text-yellow-400 text-lg mb-2">Clue #${clueIdx + 1}</h4>
+                                <p class="text-sm text-gray-300 mb-1">${status}</p>
+                                <p class="text-xs text-gray-500">Find terrain that matches this image.</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
             });
             html += '</div>';
         }
@@ -410,6 +494,93 @@ export class GameClient {
         }
 
         list.innerHTML = html;
+    }
+
+    /**
+     * Create snapshot of treasure area for clue
+     * @param {number} treasureIdx - Treasure index
+     * @returns {string} - Data URL of snapshot image
+     */
+    createSnapshot(treasureIdx) {
+        if (!this.gameState || !this.gameState.grid) return '';
+        
+        const treasure = this.gameState.treasures?.find(t => t.index === treasureIdx);
+        if (!treasure) return '';
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = SNAPSHOT_CONFIG.CANVAS_SIZE;
+        canvas.height = SNAPSHOT_CONFIG.CANVAS_SIZE;
+        const ctx = canvas.getContext('2d');
+        
+        // Draw background
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, SNAPSHOT_CONFIG.CANVAS_SIZE, SNAPSHOT_CONFIG.CANVAS_SIZE);
+        
+        const size = SNAPSHOT_CONFIG.CELL_SIZE;
+        const range = SNAPSHOT_CONFIG.RANGE;
+        
+        for (let y = -range; y < range; y++) {
+            for (let x = -range; x < range; x++) {
+                const gx = treasure.x + x;
+                const gy = treasure.y + y;
+                
+                if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE) {
+                    const val = this.gameState.grid[gy][gx];
+                    
+                    // Set color based on terrain
+                    if (val === TERRAIN_TYPES.SNOW || val === 1) ctx.fillStyle = COLORS.snow;
+                    else if (val === TERRAIN_TYPES.ICE || val === 2) ctx.fillStyle = COLORS.ice;
+                    else ctx.fillStyle = COLORS.tree;
+                    
+                    ctx.fillRect((x + range) * size, (y + range) * size, size, size);
+                    
+                    // Draw grid line
+                    ctx.strokeStyle = '#ccc';
+                    ctx.strokeRect((x + range) * size, (y + range) * size, size, size);
+
+                    // Draw terrain icons
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    if (val === TERRAIN_TYPES.TREE || val === 3) {
+                        ctx.fillText('🎄', (x + range) * size + size / 2, (y + range) * size + size / 2);
+                    } else if (val === TERRAIN_TYPES.ICE || val === 2) {
+                        ctx.fillText('❄', (x + range) * size + size / 2, (y + range) * size + size / 2);
+                    }
+                }
+            }
+        }
+        
+        // Draw X mark at treasure position
+        const centerX = SNAPSHOT_CONFIG.RANGE * size + size / 2;
+        const centerY = SNAPSHOT_CONFIG.RANGE * size + size / 2;
+        
+        ctx.font = '20px Arial';
+        ctx.fillStyle = 'red';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('❌', centerX, centerY);
+        
+        return canvas.toDataURL();
+    }
+
+    /**
+     * Show clue modal
+     * @param {number} treasureIndex - Treasure index
+     */
+    showClueModal(treasureIndex) {
+        const imgData = this.createSnapshot(treasureIndex);
+        if (!imgData) return;
+        
+        const html = `
+            <p class="mb-4">The snowman whispers a secret location...</p>
+            <div class="border-4 border-yellow-500 inline-block p-1 bg-white">
+                <img src="${imgData}" class="w-48 h-48 pixel-font">
+            </div>
+            <p class="mt-2 text-sm text-gray-500">Saved to inventory!</p>
+        `;
+        showModal('Treasure Clue #' + (treasureIndex + 1), html);
     }
 }
 

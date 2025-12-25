@@ -35,6 +35,14 @@ export class GameHandler {
             return;
         }
 
+        // Broadcast extra turn notification if applicable
+        if (result.hasExtraTurn) {
+            this.broadcastToAll(gameId, 'game:extraTurn', {
+                playerName,
+                diceValue: result.diceValue
+            });
+        }
+
         // Broadcast updated state
         this.broadcastGameState(gameId);
     }
@@ -54,6 +62,30 @@ export class GameHandler {
             return;
         }
 
+        // Broadcast tile events if any
+        if (result.events && result.events.length > 0) {
+            result.events.forEach(event => {
+                if (event.type === 'GIFT') {
+                    this.broadcastToAll(gameId, 'game:event:gift', {
+                        playerName,
+                        value: event.value,
+                        position: { x: result.newPos.x, y: result.newPos.y }
+                    });
+                } else if (event.type === 'WEAPON') {
+                    this.broadcastToAll(gameId, 'game:event:weapon', {
+                        playerName,
+                        weaponType: event.weaponType,
+                        position: { x: result.newPos.x, y: result.newPos.y }
+                    });
+                } else if (event.type === 'CLUE') {
+                    this.broadcastToAll(gameId, 'game:event:clue', {
+                        playerName,
+                        treasureIndex: event.treasureIndex
+                    });
+                }
+            });
+        }
+
         // Broadcast updated state
         this.broadcastGameState(gameId);
     }
@@ -70,6 +102,35 @@ export class GameHandler {
         if (!result.success) {
             this.sendError(socket, result.error);
             return;
+        }
+
+        // Broadcast dig result
+        if (result.found) {
+            // Found treasure
+            this.broadcastToAll(gameId, 'game:event:treasure', {
+                playerName,
+                value: result.treasureValue,
+                coins: result.coins
+            });
+        } else if (result.error) {
+            // Error cases
+            if (result.error === 'Treasure already found') {
+                this.broadcastToAll(gameId, 'game:event:digEmpty', {
+                    playerName,
+                    message: 'This treasure has already been dug up!'
+                });
+            } else if (result.error === 'No clue for this treasure') {
+                this.broadcastToAll(gameId, 'game:event:digNoClue', {
+                    playerName,
+                    message: 'The ground here seems soft, but you\'re not sure what\'s underneath. Find a Snowman to get a clue!'
+                });
+            }
+        } else {
+            // Empty hole
+            this.broadcastToAll(gameId, 'game:event:digEmpty', {
+                playerName,
+                message: 'You dig a hole but only find snow.'
+            });
         }
 
         // Broadcast updated state
@@ -235,6 +296,26 @@ export class GameHandler {
 
         game.players.forEach(player => {
             if (player.name !== excludePlayerName && player.socketId) {
+                const socket = this.getSocket(player.socketId);
+                if (socket) {
+                    socket.emit(event, data);
+                }
+            }
+        });
+    }
+
+    /**
+     * Broadcast to all players in game
+     * @param {string} gameId - Game ID
+     * @param {string} event - Event name
+     * @param {Object} data - Event data
+     */
+    broadcastToAll(gameId, event, data) {
+        const game = this.storage.getGame(gameId);
+        if (!game) return;
+
+        game.players.forEach(player => {
+            if (player.socketId) {
                 const socket = this.getSocket(player.socketId);
                 if (socket) {
                     socket.emit(event, data);

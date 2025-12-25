@@ -29,14 +29,14 @@ export class LobbyManager {
                         <!-- Create/Browse Tabs -->
                         <div class="flex gap-2 mb-6 border-b">
                             <button id="createTab" class="flex-1 py-2 px-4 font-bold text-blue-600 border-b-2 border-blue-600">
-                                Create Lobby
+                                Create Room
                             </button>
                             <button id="browseTab" class="flex-1 py-2 px-4 font-bold text-gray-500 hover:text-gray-700">
                                 Browse Rooms
                             </button>
                         </div>
 
-                        <!-- Create Lobby Form -->
+                        <!-- Create Room Form -->
                         <div id="createForm" class="space-y-4">
                             <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-2">Your Name</label>
@@ -44,9 +44,16 @@ export class LobbyManager {
                                     class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                                     placeholder="Enter your name" maxlength="20">
                             </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">Room Code (6 digits)</label>
+                                <input type="text" id="createRoomCodeInput" 
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-xl font-bold tracking-widest text-gray-900 bg-white"
+                                    placeholder="000000" maxlength="6" pattern="[0-9]{6}">
+                                <p class="text-xs text-gray-500 mt-1">Leave empty for random code</p>
+                            </div>
                             <button id="createBtn" 
                                 class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-500 transition">
-                                Create Lobby
+                                Create Room
                             </button>
                         </div>
 
@@ -55,19 +62,11 @@ export class LobbyManager {
                             <div class="flex justify-between items-center mb-4">
                                 <h3 class="text-lg font-bold text-gray-800">Available Rooms</h3>
                                 <button id="refreshRoomsBtn" 
-                                    class="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm font-bold">
+                                    class="px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-sm font-bold">
                                     <i class="fas fa-sync-alt"></i> Refresh
                                 </button>
                             </div>
                             
-                            <!-- Name Input for Joining -->
-                            <div class="mb-4">
-                                <label class="block text-sm font-bold text-gray-700 mb-2">Your Name</label>
-                                <input type="text" id="joinNameInput" 
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                                    placeholder="Enter your name" maxlength="20">
-                            </div>
-
                             <!-- Rooms List -->
                             <div id="roomsList" class="space-y-2 max-h-64 overflow-y-auto">
                                 <div class="text-center text-gray-500 py-4">
@@ -224,16 +223,28 @@ export class LobbyManager {
     }
 
     /**
-     * Handle create lobby
+     * Handle create room
      */
     handleCreate() {
         const name = $('createNameInput').value.trim();
+        const code = $('createRoomCodeInput').value.trim();
+        
         if (!name) {
             this.showError('Please enter your name');
             return;
         }
+        
+        // Validate code if provided
+        if (code && (code.length !== 6 || !/^\d{6}$/.test(code))) {
+            this.showError('Room code must be 6 digits');
+            return;
+        }
+        
         this.playerName = name;
-        this.socket.emit('lobby:create', { hostName: name });
+        this.socket.emit('lobby:create', { 
+            hostName: name,
+            roomCode: code || null // null means generate random
+        });
     }
 
 
@@ -314,7 +325,7 @@ export class LobbyManager {
                         </div>
                     </div>
                     ${isMe ? `
-                        <button class="px-4 py-1 rounded ${player.ready ? 'bg-green-500' : 'bg-gray-300'} text-white text-sm font-bold"
+                        <button class="px-4 py-1 rounded ${player.ready ? 'bg-green-500' : 'bg-orange-500'} text-white text-sm font-bold"
                                 onclick="window.lobbyManager.toggleReady()">
                             ${player.ready ? 'Ready' : 'Not Ready'}
                         </button>
@@ -375,15 +386,12 @@ export class LobbyManager {
             const isFull = room.playerCount >= room.maxPlayers;
             return `
                 <div class="border border-gray-300 rounded-lg p-3 hover:bg-gray-50 transition ${isFull ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}" 
-                     ${!isFull ? `onclick="window.lobbyManager.joinRoomByCode('${room.code}')"` : ''}>
+                     ${!isFull ? `onclick="window.lobbyManager.showJoinRoomModal('${room.code}', '${room.hostName}')"` : ''}>
                     <div class="flex justify-between items-center">
                         <div class="flex-1">
                             <div class="flex items-center gap-2 mb-1">
-                                <span class="font-mono font-bold text-blue-600 text-lg">${room.code}</span>
+                                <span class="font-bold text-gray-800 text-lg">${room.hostName}'s Room</span>
                                 ${isFull ? '<span class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded">Full</span>' : ''}
-                            </div>
-                            <div class="text-sm text-gray-600">
-                                Host: <span class="font-semibold">${room.hostName}</span>
                             </div>
                         </div>
                         <div class="text-right">
@@ -399,16 +407,124 @@ export class LobbyManager {
     }
 
     /**
-     * Join room by code
+     * Show join room modal
      */
-    joinRoomByCode(code) {
-        const name = $('joinNameInput').value.trim();
+    showJoinRoomModal(code, hostName) {
+        // Create or update modal
+        let modal = $('joinRoomModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'joinRoomModal';
+            modal.className = 'fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 hidden';
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">Join Room</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">Room: <span id="joinRoomName" class="font-semibold"></span></label>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">Your Name</label>
+                            <input type="text" id="joinRoomNameInput" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                                placeholder="Enter your name" maxlength="20">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">Room Code</label>
+                            <input type="text" id="joinRoomCodeInput" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-xl font-bold tracking-widest text-gray-900 bg-white"
+                                placeholder="000000" maxlength="6" pattern="[0-9]{6}">
+                        </div>
+                        <div id="joinRoomError" class="text-red-600 text-sm hidden"></div>
+                        <div class="flex gap-2">
+                            <button id="joinRoomCancelBtn" 
+                                class="flex-1 bg-gray-300 text-gray-800 py-2 rounded-lg font-bold hover:bg-gray-400 transition">
+                                Cancel
+                            </button>
+                            <button id="joinRoomConfirmBtn" 
+                                class="flex-1 bg-green-600 text-white py-2 rounded-lg font-bold hover:bg-green-500 transition">
+                                Join
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Setup event listeners
+            $('joinRoomCancelBtn').addEventListener('click', () => {
+                modal.classList.add('hidden');
+            });
+            $('joinRoomConfirmBtn').addEventListener('click', () => {
+                this.handleJoinRoom();
+            });
+        }
+        
+        // Update modal content
+        $('joinRoomName').textContent = hostName + "'s Room";
+        $('joinRoomNameInput').value = '';
+        $('joinRoomCodeInput').value = '';
+        $('joinRoomError').classList.add('hidden');
+        
+        // Store expected code for validation
+        this.expectedRoomCode = code;
+        
+        // Show modal
+        modal.classList.remove('hidden');
+        
+        // Focus on name input
+        setTimeout(() => {
+            $('joinRoomNameInput').focus();
+        }, 100);
+    }
+
+    /**
+     * Handle join room (with code validation)
+     */
+    handleJoinRoom() {
+        const name = $('joinRoomNameInput').value.trim();
+        const code = $('joinRoomCodeInput').value.trim();
+        
+        // Validate name
         if (!name) {
-            this.showError('Please enter your name first');
+            this.showJoinRoomError('Please enter your name');
             return;
         }
+        
+        // Validate code format
+        if (!code) {
+            this.showJoinRoomError('Please enter room code');
+            return;
+        }
+        
+        if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+            this.showJoinRoomError('Room code must be 6 digits');
+            return;
+        }
+        
+        // Validate code matches the room
+        if (code !== this.expectedRoomCode) {
+            this.showJoinRoomError('Room code does not match');
+            return;
+        }
+        
+        // Hide modal
+        $('joinRoomModal').classList.add('hidden');
+        
+        // Join room
         this.playerName = name;
         this.socket.emit('lobby:join', { lobbyCode: code, playerName: name });
+    }
+
+    /**
+     * Show error in join room modal
+     */
+    showJoinRoomError(message) {
+        const errorEl = $('joinRoomError');
+        if (errorEl) {
+            errorEl.textContent = message;
+            errorEl.classList.remove('hidden');
+        }
     }
 
     /**
