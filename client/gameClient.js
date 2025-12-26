@@ -729,6 +729,7 @@ export class GameClient {
         // Clues
         if (player.inventory && player.inventory.length > 0) {
             html += '<div class="text-white mb-4"><h3 class="font-bold text-xl mb-2">Clues</h3>';
+            html += '<div class="grid grid-cols-4 gap-2">';
             player.inventory.forEach(clueIdx => {
                 const imgData = this.createSnapshot(clueIdx);
                 const treasure = this.gameState.treasures?.find(t => t.index === clueIdx);
@@ -737,21 +738,20 @@ export class GameClient {
                     : '<span class="text-red-400">(Not dug)</span>';
                 
                 html += `
-                    <div class="bg-slate-800 p-6 rounded-lg border border-slate-600 mb-4">
-                        <div class="flex flex-col items-center gap-4">
-                            <div class="border-4 border-yellow-500 p-2 bg-white rounded-lg shadow-lg">
-                                <img src="${imgData}" class="w-64 h-64 border border-gray-500 bg-white object-contain">
+                    <div class="bg-slate-800 p-2 rounded-lg border border-slate-600">
+                        <div class="flex flex-col items-center gap-1">
+                            <div class="border-2 border-yellow-500 p-1 bg-white rounded shadow">
+                                <img src="${imgData}" class="w-full h-auto border border-gray-500 bg-white object-contain">
                             </div>
                             <div class="text-center">
-                                <h4 class="font-bold text-yellow-400 text-lg mb-2">Clue #${clueIdx + 1}</h4>
-                                <p class="text-sm text-gray-300 mb-1">${status}</p>
-                                <p class="text-xs text-gray-500">Find terrain that matches this image.</p>
+                                <h4 class="font-bold text-yellow-400 text-xs mb-0.5">#${clueIdx + 1}</h4>
+                                <p class="text-[10px] text-gray-300">${status}</p>
                             </div>
                         </div>
                     </div>
                 `;
             });
-            html += '</div>';
+            html += '</div></div>';
         }
 
         // Weapons
