@@ -52,8 +52,8 @@ io.on('connection', (socket) => {
     socketMap.set(socket.id, socket);
 
     // Lobby Actions
-    socket.on('lobby:create', ({ hostName, roomCode }) => {
-        lobbyHandler.handleCreateLobby(socket, hostName, roomCode);
+    socket.on('lobby:create', ({ hostName, roomCode, settings }) => {
+        lobbyHandler.handleCreateLobby(socket, hostName, roomCode, settings);
     });
 
     socket.on('lobby:join', ({ lobbyCode, playerName }) => {

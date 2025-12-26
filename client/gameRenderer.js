@@ -18,6 +18,7 @@ export class GameRenderer {
         this.camera = { x: 0, y: 0 };
         this.animationTime = 0;
         this.isDragging = false;
+        this.gridSize = GRID_SIZE; // Will be updated from gameState
         this.lastMouseX = 0;
         this.lastMouseY = 0;
         this.cameraFollowEnabled = true;
@@ -137,8 +138,9 @@ export class GameRenderer {
      * Clamp camera to bounds
      */
     clampCamera() {
-        const maxX = GRID_SIZE * CELL_SIZE - this.canvas.width;
-        const maxY = GRID_SIZE * CELL_SIZE - this.canvas.height;
+        const gridSize = this.gridSize || GRID_SIZE;
+        const maxX = gridSize * CELL_SIZE - this.canvas.width;
+        const maxY = gridSize * CELL_SIZE - this.canvas.height;
         
         this.camera.x = Math.max(0, Math.min(this.camera.x, maxX));
         this.camera.y = Math.max(0, Math.min(this.camera.y, maxY));
@@ -193,13 +195,15 @@ export class GameRenderer {
         this.ctx.translate(-this.camera.x, -this.camera.y);
 
         // Calculate visible range
+        const gridSize = gameState.settings?.gridSize || GRID_SIZE;
+        
         const startCol = Math.floor(this.camera.x / CELL_SIZE);
         const endCol = startCol + (this.canvas.width / CELL_SIZE) + 1;
         const startRow = Math.floor(this.camera.y / CELL_SIZE);
         const endRow = startRow + (this.canvas.height / CELL_SIZE) + 1;
 
         // Draw grid
-        this.renderGrid(gameState.grid, startRow, endRow, startCol, endCol);
+        this.renderGrid(gameState.grid, startRow, endRow, startCol, endCol, gridSize);
         
         // Draw objects
         this.renderObjects(gameState);
@@ -213,9 +217,9 @@ export class GameRenderer {
     /**
      * Render grid terrain
      */
-    renderGrid(grid, startRow, endRow, startCol, endCol) {
-        for (let y = Math.max(0, startRow); y <= Math.min(GRID_SIZE - 1, endRow); y++) {
-            for (let x = Math.max(0, startCol); x <= Math.min(GRID_SIZE - 1, endCol); x++) {
+    renderGrid(grid, startRow, endRow, startCol, endCol, gridSize = GRID_SIZE) {
+        for (let y = Math.max(0, startRow); y <= Math.min(gridSize - 1, endRow); y++) {
+            for (let x = Math.max(0, startCol); x <= Math.min(gridSize - 1, endCol); x++) {
                 if (!grid[y]) continue;
                 
                 const cellVal = grid[y][x];

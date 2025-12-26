@@ -65,8 +65,8 @@ export class LobbyManager {
                                         <label class="block text-sm font-bold text-gray-700 mb-2">Grid Size</label>
                                         <input type="number" id="gridSizeInput" 
                                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                                            value="40" min="20" max="60" step="5">
-                                        <p class="text-xs text-gray-500 mt-1">Size of the game board (20-60)</p>
+                                            value="40" min="25" max="50" step="5">
+                                        <p class="text-xs text-gray-500 mt-1">Size of the game board (25-50)</p>
                                     </div>
                                     
                                     <!-- Number of Gifts -->
@@ -84,25 +84,28 @@ export class LobbyManager {
                                         <input type="text" id="treasureValuesInput" 
                                             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                                             value="100,200,500,1000" placeholder="100,200,500,1000">
-                                        <p class="text-xs text-gray-500 mt-1">Values for each treasure (4 values)</p>
+                                        <p class="text-xs text-gray-500 mt-1">Values for each treasure (1-8 treasures, comma-separated)</p>
                                     </div>
                                     
-                                    <!-- Number of Knives -->
-                                    <div>
-                                        <label class="block text-sm font-bold text-gray-700 mb-2">Number of Knives</label>
-                                        <input type="number" id="numKnivesInput" 
-                                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                                            value="2" min="0" max="10" step="1">
-                                        <p class="text-xs text-gray-500 mt-1">Number of knives on the board (0-10)</p>
-                                    </div>
-                                    
-                                    <!-- Number of Swords -->
-                                    <div>
-                                        <label class="block text-sm font-bold text-gray-700 mb-2">Number of Swords</label>
-                                        <input type="number" id="numSwordsInput" 
-                                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                                            value="2" min="0" max="10" step="1">
-                                        <p class="text-xs text-gray-500 mt-1">Number of swords on the board (0-10)</p>
+                                    <!-- Weapons (Knives and Swords in one row) -->
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <!-- Number of Knives -->
+                                        <div>
+                                            <label class="block text-sm font-bold text-gray-700 mb-2">Number of Knives</label>
+                                            <input type="number" id="numKnivesInput" 
+                                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                                                value="2" min="0" max="20" step="1">
+                                            <p class="text-xs text-gray-500 mt-1">0-20</p>
+                                        </div>
+                                        
+                                        <!-- Number of Swords -->
+                                        <div>
+                                            <label class="block text-sm font-bold text-gray-700 mb-2">Number of Swords</label>
+                                            <input type="number" id="numSwordsInput" 
+                                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                                                value="2" min="0" max="20" step="1">
+                                            <p class="text-xs text-gray-500 mt-1">0-20</p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -311,10 +314,55 @@ export class LobbyManager {
             return;
         }
         
+        // Get advanced settings
+        const gridSize = parseInt($('gridSizeInput').value) || 40;
+        const numGifts = parseInt($('numGiftsInput').value) || 20;
+        const treasureValuesStr = $('treasureValuesInput').value.trim() || '100,200,500,1000';
+        const numKnives = parseInt($('numKnivesInput').value) || 2;
+        const numSwords = parseInt($('numSwordsInput').value) || 2;
+        
+        // Parse treasure values
+        let treasureValues;
+        try {
+            treasureValues = treasureValuesStr.split(',').map(v => parseInt(v.trim())).filter(v => !isNaN(v) && v > 0);
+            if (treasureValues.length < 1 || treasureValues.length > 8) {
+                this.showError('Treasure values must be between 1 and 8 numbers');
+                return;
+            }
+        } catch (e) {
+            this.showError('Invalid treasure values format');
+            return;
+        }
+        
+        // Validate settings
+        if (gridSize < 25 || gridSize > 50) {
+            this.showError('Grid size must be between 25 and 50');
+            return;
+        }
+        if (numGifts < 5 || numGifts > 50) {
+            this.showError('Number of gifts must be between 5 and 50');
+            return;
+        }
+        if (numKnives < 0 || numKnives > 20) {
+            this.showError('Number of knives must be between 0 and 20');
+            return;
+        }
+        if (numSwords < 0 || numSwords > 20) {
+            this.showError('Number of swords must be between 0 and 20');
+            return;
+        }
+        
         this.playerName = name;
         this.socket.emit('lobby:create', { 
-            hostName: name,
-            roomCode: code || null // null means generate random
+            hostName: name, 
+            roomCode: code || null, // null means generate random
+            settings: {
+                gridSize,
+                numGifts,
+                treasureValues,
+                numKnives,
+                numSwords
+            }
         });
     }
 

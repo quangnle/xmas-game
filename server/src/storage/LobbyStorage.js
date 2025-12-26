@@ -17,9 +17,10 @@ export class LobbyStorage {
      * @param {string} hostName - Host player name
      * @param {string} hostSocketId - Host socket ID
      * @param {string} [customCode] - Optional custom room code (must be unique)
+     * @param {Object} [settings] - Optional game settings
      * @returns {import('../core/LobbyState.js').LobbyState} Created lobby
      */
-    createLobby(hostName, hostSocketId, customCode = null) {
+    createLobby(hostName, hostSocketId, customCode = null, settings = null) {
         const lobbyId = `lobby-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         let code;
         
@@ -47,7 +48,11 @@ export class LobbyStorage {
             }],
             settings: {
                 maxPlayers: 4,
-                gridSize: 40
+                gridSize: settings?.gridSize || 40,
+                numGifts: settings?.numGifts || 20,
+                treasureValues: settings?.treasureValues || [100, 200, 500, 1000],
+                numKnives: settings?.numKnives || 2,
+                numSwords: settings?.numSwords || 2
             },
             status: 'WAITING',
             gameId: null

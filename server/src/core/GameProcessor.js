@@ -37,9 +37,10 @@ export class GameProcessor {
      * Initialize a new game
      * @param {Array<{name: string}>} players - Array of player objects with name
      * @param {number} [seed] - Optional random seed
+     * @param {Object} [settings] - Optional game settings
      * @returns {string} Game ID
      */
-    initializeGame(players, seed = null) {
+    initializeGame(players, seed = null, settings = null) {
         if (!players || players.length < 2 || players.length > 4) {
             throw new Error('Game must have 2-4 players');
         }
@@ -48,18 +49,34 @@ export class GameProcessor {
         const gameSeed = seed !== null ? seed : generateSeed();
         const random = createSeededRandom(gameSeed);
 
+        // Use settings or defaults
+        const gridSize = settings?.gridSize || GRID_SIZE;
+        const numGifts = settings?.numGifts || NUM_GIFTS;
+        const treasureValues = settings?.treasureValues || TREASURE_VALUES;
+        const numKnives = settings?.numKnives || NUM_KNIVES;
+        const numSwords = settings?.numSwords || NUM_SWORDS;
+
         const gameState = createInitialGameState(gameId, gameSeed);
         
-        // Generate grid
-        gameState.grid = this.generateGrid(random);
+        // Store settings in game state for reference
+        gameState.settings = {
+            gridSize,
+            numGifts,
+            treasureValues,
+            numKnives,
+            numSwords
+        };
         
-        // Initialize players
-        gameState.players = this.initPlayers(players);
+        // Generate grid with custom size
+        gameState.grid = this.generateGrid(random, gridSize);
         
-        // Place items
-        this.placeTreasuresAndSnowmen(gameState, random);
-        this.placeGifts(gameState, random);
-        this.placeWeapons(gameState, random);
+        // Initialize players with custom grid size
+        gameState.players = this.initPlayers(players, gridSize);
+        
+        // Place items with custom settings
+        this.placeTreasuresAndSnowmen(gameState, random, treasureValues);
+        this.placeGifts(gameState, random, numGifts);
+        this.placeWeapons(gameState, random, numKnives, numSwords);
         
         // Set initial status
         gameState.status = 'PLAYING';
@@ -74,13 +91,14 @@ export class GameProcessor {
     /**
      * Generate terrain grid
      * @param {import('../utils/random.js').SeededRandom} random - Seeded random generator
-     * @returns {number[][]} 40x40 grid
+     * @param {number} [gridSize] - Grid size (default: GRID_SIZE)
+     * @returns {number[][]} Grid
      */
-    generateGrid(random) {
+    generateGrid(random, gridSize = GRID_SIZE) {
         const grid = [];
-        for (let y = 0; y < GRID_SIZE; y++) {
+        for (let y = 0; y < gridSize; y++) {
             const row = [];
-            for (let x = 0; x < GRID_SIZE; x++) {
+            for (let x = 0; x < gridSize; x++) {
                 const rand = random.next();
                 let type = TERRAIN_TYPES.SNOW;
                 
@@ -101,11 +119,20 @@ export class GameProcessor {
     /**
      * Initialize players
      * @param {Array<{name: string}>} players - Player data
+     * @param {number} [gridSize] - Grid size (default: GRID_SIZE)
      * @returns {Array} Array of player objects
      */
-    initPlayers(players) {
+    initPlayers(players, gridSize = GRID_SIZE) {
+        // Calculate start positions based on grid size (corners)
+        const startPositions = [
+            { x: 0, y: 0 },
+            { x: gridSize - 1, y: 0 },
+            { x: 0, y: gridSize - 1 },
+            { x: gridSize - 1, y: gridSize - 1 }
+        ];
+        
         return players.map((p, index) => {
-            const startPos = START_POSITIONS[index];
+            const startPos = startPositions[index];
             return {
                 id: `player-${index}`,
                 name: p.name,
@@ -146,19 +173,22 @@ export class GameProcessor {
      * Place treasures and snowmen
      * @param {import('../core/GameState.js').GameState} gameState - Game state
      * @param {import('../utils/random.js').SeededRandom} random - Seeded random generator
+     * @param {number[]} [treasureValues] - Treasure values array (default: TREASURE_VALUES)
      */
-    placeTreasuresAndSnowmen(gameState, random) {
+    placeTreasuresAndSnowmen(gameState, random, treasureValues = TREASURE_VALUES) {
         const MIN_DISTANCE = 5; // Minimum distance between items
+        const gridSize = gameState.settings?.gridSize || GRID_SIZE;
+        const numTreasures = treasureValues.length;
         
-        for (let i = 0; i < NUM_TREASURES; i++) {
+        for (let i = 0; i < numTreasures; i++) {
             // Place treasure (not at corners, at least 2 cells from edge)
             let tx, ty;
             let attempts = 0;
             const maxAttempts = 1000;
             
             do {
-                tx = Math.floor(random.next() * (GRID_SIZE - 4)) + 2;
-                ty = Math.floor(random.next() * (GRID_SIZE - 4)) + 2;
+                tx = Math.floor(random.next() * (gridSize - 4)) + 2;
+                ty = Math.floor(random.next() * (gridSize - 4)) + 2;
                 attempts++;
             } while (
                 attempts < maxAttempts && 
@@ -175,9 +205,9 @@ export class GameProcessor {
             gameState.treasures.push({
                 x: tx,
                 y: ty,
-                value: TREASURE_VALUES[i],
-                found: false,
-                index: i
+                index: i,
+                value: treasureValues[i] || TREASURE_VALUES[i] || 100,
+                found: false
             });
 
             // Place snowman linked to this treasure (at least 5 cells away)
@@ -185,8 +215,8 @@ export class GameProcessor {
             attempts = 0;
             
             do {
-                sx = Math.floor(random.next() * GRID_SIZE);
-                sy = Math.floor(random.next() * GRID_SIZE);
+                sx = Math.floor(random.next() * gridSize);
+                sy = Math.floor(random.next() * gridSize);
                 attempts++;
             } while (
                 attempts < maxAttempts && (
@@ -208,16 +238,19 @@ export class GameProcessor {
      * Place gifts on the map
      * @param {import('../core/GameState.js').GameState} gameState - Game state
      * @param {import('../utils/random.js').SeededRandom} random - Seeded random generator
+     * @param {number} [numGifts] - Number of gifts (default: NUM_GIFTS)
      */
-    placeGifts(gameState, random) {
-        for (let i = 0; i < NUM_GIFTS; i++) {
+    placeGifts(gameState, random, numGifts = NUM_GIFTS) {
+        const gridSize = gameState.settings?.gridSize || GRID_SIZE;
+        
+        for (let i = 0; i < numGifts; i++) {
             let gx, gy;
             let attempts = 0;
             const maxAttempts = 500;
             
             do {
-                gx = Math.floor(random.next() * GRID_SIZE);
-                gy = Math.floor(random.next() * GRID_SIZE);
+                gx = Math.floor(random.next() * gridSize);
+                gy = Math.floor(random.next() * gridSize);
                 attempts++;
             } while (attempts < maxAttempts && this.isOccupied(gameState, gx, gy));
             
@@ -231,17 +264,21 @@ export class GameProcessor {
      * Place weapons on the map
      * @param {import('../core/GameState.js').GameState} gameState - Game state
      * @param {import('../utils/random.js').SeededRandom} random - Seeded random generator
+     * @param {number} [numKnives] - Number of knives (default: NUM_KNIVES)
+     * @param {number} [numSwords] - Number of swords (default: NUM_SWORDS)
      */
-    placeWeapons(gameState, random) {
+    placeWeapons(gameState, random, numKnives = NUM_KNIVES, numSwords = NUM_SWORDS) {
+        const gridSize = gameState.settings?.gridSize || GRID_SIZE;
+        
         // Place knives
-        for (let i = 0; i < NUM_KNIVES; i++) {
+        for (let i = 0; i < numKnives; i++) {
             let wx, wy;
             let attempts = 0;
             const maxAttempts = 500;
             
             do {
-                wx = Math.floor(random.next() * GRID_SIZE);
-                wy = Math.floor(random.next() * GRID_SIZE);
+                wx = Math.floor(random.next() * gridSize);
+                wy = Math.floor(random.next() * gridSize);
                 attempts++;
             } while (attempts < maxAttempts && this.isOccupied(gameState, wx, wy));
             
@@ -251,14 +288,14 @@ export class GameProcessor {
         }
         
         // Place swords
-        for (let i = 0; i < NUM_SWORDS; i++) {
+        for (let i = 0; i < numSwords; i++) {
             let wx, wy;
             let attempts = 0;
             const maxAttempts = 500;
             
             do {
-                wx = Math.floor(random.next() * GRID_SIZE);
-                wy = Math.floor(random.next() * GRID_SIZE);
+                wx = Math.floor(random.next() * gridSize);
+                wy = Math.floor(random.next() * gridSize);
                 attempts++;
             } while (attempts < maxAttempts && this.isOccupied(gameState, wx, wy));
             
@@ -421,7 +458,8 @@ export class GameProcessor {
         const ny = player.y + dir.dy;
 
         // Boundary check
-        if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) {
+        const gridSize = game.settings?.gridSize || GRID_SIZE;
+        if (nx < 0 || nx >= gridSize || ny < 0 || ny >= gridSize) {
             return { success: false, error: 'Out of bounds' };
         }
 

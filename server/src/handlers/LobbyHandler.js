@@ -36,8 +36,9 @@ export class LobbyHandler {
      * @param {Object} socket - Socket.io socket
      * @param {string} hostName - Host player name
      * @param {string} [roomCode] - Optional custom room code
+     * @param {Object} [settings] - Optional game settings
      */
-    handleCreateLobby(socket, hostName, roomCode = null) {
+    handleCreateLobby(socket, hostName, roomCode = null, settings = {}) {
         // Validate host name
         const validation = validatePlayerName(hostName);
         if (!validation.valid) {
@@ -54,9 +55,29 @@ export class LobbyHandler {
             }
         }
         
+        // Validate settings if provided
+        if (settings) {
+            if (settings.gridSize && (settings.gridSize < 25 || settings.gridSize > 50)) {
+                this.sendError(socket, 'Grid size must be between 25 and 50');
+                return;
+            }
+            if (settings.treasureValues && (!Array.isArray(settings.treasureValues) || settings.treasureValues.length < 1 || settings.treasureValues.length > 8)) {
+                this.sendError(socket, 'Treasure values must be an array with 1-8 values');
+                return;
+            }
+            if (settings.numKnives !== undefined && (settings.numKnives < 0 || settings.numKnives > 20)) {
+                this.sendError(socket, 'Number of knives must be between 0 and 20');
+                return;
+            }
+            if (settings.numSwords !== undefined && (settings.numSwords < 0 || settings.numSwords > 20)) {
+                this.sendError(socket, 'Number of swords must be between 0 and 20');
+                return;
+            }
+        }
+        
         try {
-            // Create lobby with optional custom code
-            const lobby = this.lobbyStorage.createLobby(hostName, socket.id, roomCode);
+            // Create lobby with optional custom code and settings
+            const lobby = this.lobbyStorage.createLobby(hostName, socket.id, roomCode, settings);
             
             // Join socket room
             socket.join(lobby.lobbyId);
@@ -196,9 +217,9 @@ export class LobbyHandler {
         // Update lobby status
         this.lobbyStorage.updateLobbyStatus(lobbyId, 'STARTING');
         
-        // Initialize game
+        // Initialize game with lobby settings
         const players = lobby.players.map(p => ({ name: p.name }));
-        const gameId = this.gameProcessor.initializeGame(players);
+        const gameId = this.gameProcessor.initializeGame(players, null, lobby.settings);
         
         // Link game to lobby
         this.lobbyStorage.setGameId(lobbyId, gameId);

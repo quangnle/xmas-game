@@ -15,6 +15,10 @@
  * @typedef {Object} LobbySettings
  * @property {number} maxPlayers - Maximum players
  * @property {number} gridSize - Grid size
+ * @property {number} numGifts - Number of gifts
+ * @property {number[]} treasureValues - Treasure values array (4 values)
+ * @property {number} numKnives - Number of knives
+ * @property {number} numSwords - Number of swords
  */
 
 /**
