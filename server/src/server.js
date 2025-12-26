@@ -35,7 +35,7 @@ function getSocket(socketId) {
 }
 
 // Initialize handlers
-const gameHandler = new GameHandler(gameProcessor, gameStorage, getSocket);
+const gameHandler = new GameHandler(gameProcessor, gameStorage, getSocket, io);
 const lobbyHandler = new LobbyHandler(lobbyStorage, gameProcessor, getSocket, io);
 
 // Express middleware
@@ -103,6 +103,10 @@ io.on('connection', (socket) => {
     });
 
     // Duel Actions
+    socket.on('game:duel:fight', ({ gameId, playerName }) => {
+        gameHandler.handleDuelFight(socket, gameId, playerName);
+    });
+
     socket.on('game:duel:selectWeapon', ({ gameId, playerName, weaponType }) => {
         gameHandler.handleDuelSelectWeapon(socket, gameId, playerName, weaponType);
     });

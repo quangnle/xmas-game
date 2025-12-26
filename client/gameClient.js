@@ -36,6 +36,18 @@ export class GameClient {
         this.socket.on('game:stateUpdate', (gameState) => {
             this.gameState = gameState;
             this.updateUI();
+            
+            // Update inventory if modal is open
+            const inventoryModal = $('inventoryModal');
+            if (inventoryModal && !inventoryModal.classList.contains('hidden')) {
+                this.updateInventory();
+            }
+            
+            // Update duel modal if it's open
+            if (gameState.duelState && !$('duelModal').classList.contains('hidden')) {
+                // Update visibility
+                this.updateDuelModalVisibility();
+            }
         });
 
         // Game errors
@@ -57,6 +69,7 @@ export class GameClient {
         });
 
         this.socket.on('game:duel:resolved', (result) => {
+            console.log('[DUEL] Received duel result from server:', result);
             this.showDuelResult(result);
         });
 
@@ -137,6 +150,13 @@ export class GameClient {
         $('rollBtn').onclick = () => this.handleRollDice();
         $('digBtn').onclick = () => this.handleDig();
         $('skipBtn').onclick = () => this.handleNextTurn();
+        
+        // Duel
+        $('duelRollBtn').onclick = () => this.handleDuelRoll();
+        $('duelOkBtn').onclick = () => {
+            const modal = $('duelModal');
+            if (modal) modal.classList.add('hidden');
+        };
         
         // Inventory
         $('inventoryBtn').onclick = () => this.toggleInventory();
@@ -262,11 +282,44 @@ export class GameClient {
     }
 
     /**
-     * Handle duel roll
+     * Handle duel fight (new simplified logic - server handles everything)
      */
     handleDuelRoll() {
-        if (!this.gameId) return;
-        this.socket.emit('game:duel:roll', { gameId: this.gameId, playerName: this.playerName });
+        if (!this.gameId) {
+            console.log('[DUEL] No gameId');
+            return;
+        }
+        
+        // Check if duel modal is open (more reliable than checking gameState.duelState)
+        const modal = $('duelModal');
+        if (!modal || modal.classList.contains('hidden')) {
+            console.log('[DUEL] No active duel - modal not visible');
+            return;
+        }
+        
+        // Check if this player is player1 (attacker) in the duel
+        // Player1 is always the one in turn who can initiate fight
+        if (this.gameState && this.gameState.duelState) {
+            if (this.gameState.duelState.player1 !== this.playerName) {
+                console.log('[DUEL] Only the attacker can initiate fight', {
+                    player1: this.gameState.duelState.player1,
+                    myName: this.playerName
+                });
+                return;
+            }
+        }
+        
+        console.log('[DUEL] Sending fight request to server', {
+            gameId: this.gameId,
+            playerName: this.playerName
+        });
+        
+        // Send fight request - server will handle everything automatically
+        // Server will validate if it's the player's turn and if duel exists
+        this.socket.emit('game:duel:fight', { 
+            gameId: this.gameId, 
+            playerName: this.playerName 
+        });
     }
 
     /**
@@ -346,9 +399,26 @@ export class GameClient {
         const canDig = isMyTurn && turnState === 'MOVE';
         const canSkip = isMyTurn && turnState === 'MOVE';
 
-        if ($('rollBtn')) {
-            $('rollBtn').disabled = !canRoll;
+        const rollBtn = $('rollBtn');
+        if (rollBtn) {
+            rollBtn.disabled = !canRoll;
+            
+            // Update button text and style based on state
+            if (turnState === 'MOVE' && isMyTurn) {
+                // Already rolled, show "ROLLED"
+                rollBtn.innerHTML = '<i class="fas fa-dice"></i> ROLLED';
+                rollBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else if (canRoll) {
+                // Can roll
+                rollBtn.innerHTML = '<i class="fas fa-dice"></i> ROLL DICE';
+                rollBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                // Cannot roll (not my turn or wrong state)
+                rollBtn.innerHTML = '<i class="fas fa-dice"></i> ROLL DICE';
+                rollBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
         }
+        
         if ($('digBtn')) {
             $('digBtn').disabled = !canDig;
         }
@@ -366,24 +436,58 @@ export class GameClient {
 
         modal.classList.remove('hidden');
         
+        // Update gameState.duelState to match the received duelState
+        if (this.gameState) {
+            this.gameState.duelState = {
+                player1: duelState.player1Name,
+                player2: duelState.player2Name,
+                player1Weapon: duelState.player1Weapon,
+                player2Weapon: duelState.player2Weapon,
+                player1Roll: duelState.player1Roll,
+                player2Roll: duelState.player2Roll,
+                phase: duelState.phase
+            };
+        }
+        
         // Update duel UI
         const p1 = this.gameState.players.find(p => p.name === duelState.player1Name);
         const p2 = this.gameState.players.find(p => p.name === duelState.player2Name);
         
         if (p1 && $('duelP1Avatar')) {
             $('duelP1Avatar').style.backgroundColor = p1.color;
-            $('duelP1Avatar').textContent = p1.name.charAt(0).toUpperCase();
+            $('duelP1Avatar').textContent = p1.name.substring(0, 2).toUpperCase();
         }
         if (p2 && $('duelP2Avatar')) {
             $('duelP2Avatar').style.backgroundColor = p2.color;
-            $('duelP2Avatar').textContent = p2.name.charAt(0).toUpperCase();
+            $('duelP2Avatar').textContent = p2.name.substring(0, 2).toUpperCase();
         }
 
-        // Setup weapon selection if needed
-        if (duelState.player1Name === this.playerName && !duelState.player1Weapon) {
-            this.setupWeaponSelection(duelState, 1);
-        } else if (duelState.player2Name === this.playerName && !duelState.player2Weapon) {
-            this.setupWeaponSelection(duelState, 2);
+        // Reset duel results
+        if ($('duelResult1')) $('duelResult1').textContent = '-';
+        if ($('duelResult2')) $('duelResult2').textContent = '-';
+        
+        // Hide result message and OK button initially
+        const resultMessage = $('duelResultMessage');
+        const okBtn = $('duelOkBtn');
+        if (resultMessage) resultMessage.classList.add('hidden');
+        if (okBtn) okBtn.classList.add('hidden');
+
+        // Check if current player is the one whose turn it is
+        const currentPlayer = this.gameState.players?.[this.gameState.currentPlayerIndex];
+        const isMyTurn = currentPlayer && currentPlayer.name === this.playerName;
+        
+        // Only show FIGHT button if it's my turn
+        const fightBtn = $('duelRollBtn');
+        if (fightBtn) {
+            if (isMyTurn) {
+                fightBtn.classList.remove('hidden');
+                fightBtn.disabled = false;
+                fightBtn.classList.add('animate-pulse');
+            } else {
+                fightBtn.classList.add('hidden');
+                fightBtn.disabled = true;
+                fightBtn.classList.remove('animate-pulse');
+            }
         }
     }
 
@@ -403,7 +507,43 @@ export class GameClient {
     }
 
     /**
-     * Update duel rolls
+     * Update duel rolls from state
+     */
+    updateDuelRollsFromState(duelState) {
+        if (!duelState) return;
+        
+        // Calculate totals with weapon bonuses
+        const p1Bonus = duelState.player1Weapon ? (WEAPONS[duelState.player1Weapon]?.bonus || 0) : 0;
+        const p2Bonus = duelState.player2Weapon ? (WEAPONS[duelState.player2Weapon]?.bonus || 0) : 0;
+        
+        if ($('duelResult1')) {
+            if (duelState.player1Roll !== null) {
+                const total = duelState.player1Roll + p1Bonus;
+                if (p1Bonus > 0) {
+                    $('duelResult1').textContent = `${duelState.player1Roll}+${p1Bonus}=${total}`;
+                } else {
+                    $('duelResult1').textContent = duelState.player1Roll.toString();
+                }
+            } else {
+                $('duelResult1').textContent = '-';
+            }
+        }
+        if ($('duelResult2')) {
+            if (duelState.player2Roll !== null) {
+                const total = duelState.player2Roll + p2Bonus;
+                if (p2Bonus > 0) {
+                    $('duelResult2').textContent = `${duelState.player2Roll}+${p2Bonus}=${total}`;
+                } else {
+                    $('duelResult2').textContent = duelState.player2Roll.toString();
+                }
+            } else {
+                $('duelResult2').textContent = '-';
+            }
+        }
+    }
+
+    /**
+     * Update duel rolls (legacy method for socket events)
      */
     updateDuelRolls(data) {
         if ($('duelResult1')) {
@@ -418,10 +558,133 @@ export class GameClient {
      * Show duel result
      */
     showDuelResult(result) {
-        setTimeout(() => {
-            const modal = $('duelModal');
-            if (modal) modal.classList.add('hidden');
-        }, 3000);
+        console.log('[DUEL] showDuelResult called with:', result);
+        
+        // Hide fight button when duel is resolved
+        const fightBtn = $('duelRollBtn');
+        if (fightBtn) {
+            fightBtn.classList.add('hidden');
+            fightBtn.disabled = true;
+            console.log('[DUEL] Fight button hidden');
+        }
+        
+        // Update duel results display with actual rolls
+        if (result.p1Roll !== undefined && result.p2Roll !== undefined) {
+            const p1Bonus = result.p1Weapon ? (WEAPONS[result.p1Weapon]?.bonus || 0) : 0;
+            const p2Bonus = result.p2Weapon ? (WEAPONS[result.p2Weapon]?.bonus || 0) : 0;
+            
+            console.log('[DUEL] Updating results:', {
+                p1Roll: result.p1Roll,
+                p1Bonus,
+                p1Total: result.p1Total,
+                p2Roll: result.p2Roll,
+                p2Bonus,
+                p2Total: result.p2Total
+            });
+            
+            if ($('duelResult1')) {
+                if (p1Bonus > 0) {
+                    $('duelResult1').textContent = `${result.p1Roll}+${p1Bonus}=${result.p1Total}`;
+                } else {
+                    $('duelResult1').textContent = result.p1Roll.toString();
+                }
+                console.log('[DUEL] Updated duelResult1:', $('duelResult1').textContent);
+            }
+            if ($('duelResult2')) {
+                if (p2Bonus > 0) {
+                    $('duelResult2').textContent = `${result.p2Roll}+${p2Bonus}=${result.p2Total}`;
+                } else {
+                    $('duelResult2').textContent = result.p2Roll.toString();
+                }
+                console.log('[DUEL] Updated duelResult2:', $('duelResult2').textContent);
+            }
+        } else {
+            console.log('[DUEL] Missing roll data in result');
+        }
+        
+        // Show winner/loser message in modal
+        const resultMessage = $('duelResultMessage');
+        const winnerText = $('duelWinnerText');
+        if (resultMessage && winnerText) {
+            if (result.winner === this.playerName) {
+                winnerText.textContent = `🎉 You won! +${result.coinTransfer} coins!`;
+                winnerText.className = 'text-lg font-bold text-green-400';
+            } else if (result.loser === this.playerName) {
+                winnerText.textContent = `😢 You lost! -${result.coinTransfer} coins!`;
+                winnerText.className = 'text-lg font-bold text-red-400';
+            } else {
+                winnerText.textContent = `${result.winner} won! ${result.loser} lost ${result.coinTransfer} coins!`;
+                winnerText.className = 'text-lg font-bold text-yellow-400';
+            }
+            resultMessage.classList.remove('hidden');
+            console.log('[DUEL] Result message shown:', winnerText.textContent);
+        } else {
+            console.log('[DUEL] Result message elements not found', {
+                resultMessage: !!resultMessage,
+                winnerText: !!winnerText
+            });
+        }
+        
+        // Show OK button
+        const okBtn = $('duelOkBtn');
+        if (okBtn) {
+            okBtn.classList.remove('hidden');
+            console.log('[DUEL] OK button shown');
+        } else {
+            console.log('[DUEL] OK button not found');
+        }
+        
+        // Show toast notification
+        if (result.winner === this.playerName) {
+            showToast(`🎉 You won! +${result.coinTransfer} coins!`, 'center');
+        } else if (result.loser === this.playerName) {
+            showToast(`😢 You lost! -${result.coinTransfer} coins!`, 'center');
+        } else {
+            showToast(`${result.winner} won! ${result.loser} lost ${result.coinTransfer} coins!`, 'center');
+        }
+    }
+
+    /**
+     * Update duel modal visibility based on current turn
+     */
+    updateDuelModalVisibility() {
+        if (!this.gameState || !this.gameState.duelState) return;
+        
+        const currentPlayer = this.gameState.players?.[this.gameState.currentPlayerIndex];
+        const isMyTurn = currentPlayer && currentPlayer.name === this.playerName;
+        
+        const fightBtn = $('duelRollBtn');
+        if (fightBtn) {
+            // Check if both players have rolled
+            const bothRolled = this.gameState.duelState.player1Roll !== null && 
+                              this.gameState.duelState.player2Roll !== null;
+            
+            // Only show fight button if:
+            // - It's my turn
+            // - Phase is SELECT_WEAPON or ROLLING
+            // - I haven't rolled yet (or both haven't rolled)
+            if (isMyTurn && !bothRolled && 
+                (this.gameState.duelState.phase === 'SELECT_WEAPON' || 
+                 this.gameState.duelState.phase === 'ROLLING')) {
+                const myRoll = (this.gameState.duelState.player1 === this.playerName && 
+                               this.gameState.duelState.player1Roll === null) ||
+                              (this.gameState.duelState.player2 === this.playerName && 
+                               this.gameState.duelState.player2Roll === null);
+                if (myRoll) {
+                    fightBtn.classList.remove('hidden');
+                    fightBtn.disabled = false;
+                    fightBtn.classList.add('animate-pulse');
+                } else {
+                    fightBtn.classList.add('hidden');
+                    fightBtn.disabled = true;
+                    fightBtn.classList.remove('animate-pulse');
+                }
+            } else {
+                fightBtn.classList.add('hidden');
+                fightBtn.disabled = true;
+                fightBtn.classList.remove('animate-pulse');
+            }
+        }
     }
 
     /**
@@ -444,10 +707,22 @@ export class GameClient {
      */
     updateInventory() {
         const list = $('inventoryList');
-        if (!list || !this.gameState) return;
+        if (!list || !this.gameState) {
+            console.log('[INVENTORY] Cannot update: list or gameState missing');
+            return;
+        }
 
         const player = this.gameState.players.find(p => p.name === this.playerName);
-        if (!player) return;
+        if (!player) {
+            console.log('[INVENTORY] Player not found:', this.playerName);
+            return;
+        }
+
+        console.log('[INVENTORY] Updating inventory for player:', {
+            name: player.name,
+            weapons: player.weapons,
+            inventory: player.inventory
+        });
 
         let html = '';
         
@@ -494,6 +769,7 @@ export class GameClient {
         }
 
         list.innerHTML = html;
+        console.log('[INVENTORY] Inventory HTML updated');
     }
 
     /**

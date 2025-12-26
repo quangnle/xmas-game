@@ -368,7 +368,7 @@ export class GameProcessor {
         game.currentMoves = diceValue;
         game.turnState = 'MOVE';
         
-        // Check for extra turn (6 or 12)
+        // Check for extra turn (6 or 12) - keep same logic for now
         game.hasExtraTurn = (diceValue === 6 || diceValue === 12);
         
         return {
@@ -601,6 +601,175 @@ export class GameProcessor {
     }
 
     /**
+     * Execute duel fight - server handles everything automatically
+     * @param {string} gameId - Game ID
+     * @param {string} playerName - Player name (must be the one in turn)
+     * @returns {{success: boolean, winner?: string, loser?: string, coinTransfer?: number, p1Roll?: number, p2Roll?: number, p1Total?: number, p2Total?: number, p1Weapon?: string, p2Weapon?: string, error?: string}}
+     */
+    duelFight(gameId, playerName) {
+        const game = this.storage.getGame(gameId);
+        if (!game) {
+            return { success: false, error: 'Game not found' };
+        }
+
+        if (!game.duelState) {
+            return { success: false, error: 'No active duel' };
+        }
+
+        // Verify player is in turn and is player1 (attacker)
+        const currentPlayer = game.players[game.currentPlayerIndex];
+        if (!currentPlayer || currentPlayer.name !== playerName) {
+            return { success: false, error: 'Not your turn' };
+        }
+
+        if (game.duelState.player1 !== playerName) {
+            return { success: false, error: 'Only the attacker can initiate fight' };
+        }
+
+        const p1 = game.players.find(p => p.name === game.duelState.player1);
+        const p2 = game.players.find(p => p.name === game.duelState.player2);
+
+        if (!p1 || !p2) {
+            return { success: false, error: 'Players not found' };
+        }
+
+        // Auto-select weapons (use first weapon if available, otherwise null)
+        let p1Weapon = null;
+        if (p1.weapons && p1.weapons.length > 0) {
+            p1Weapon = p1.weapons[0];
+        }
+
+        let p2Weapon = null;
+        if (p2.weapons && p2.weapons.length > 0) {
+            p2Weapon = p2.weapons[0];
+        }
+
+        // Roll dice and resolve until there's a winner (no tie)
+        const random = createSeededRandom(game.seed + Date.now() + Math.random());
+        let p1Roll, p2Roll, p1Total, p2Total;
+        let attempts = 0;
+        const maxAttempts = 100; // Safety limit
+
+        do {
+            attempts++;
+            if (attempts > maxAttempts) {
+                return { success: false, error: 'Too many tie attempts' };
+            }
+
+            // Roll 2 dice for each player
+            const p1d1 = random.randomInt(1, 6);
+            const p1d2 = random.randomInt(1, 6);
+            p1Roll = p1d1 + p1d2;
+
+            const p2d1 = random.randomInt(1, 6);
+            const p2d2 = random.randomInt(1, 6);
+            p2Roll = p2d1 + p2d2;
+
+            // Apply weapon bonuses
+            const p1Bonus = p1Weapon ? WEAPONS[p1Weapon].bonus : 0;
+            const p2Bonus = p2Weapon ? WEAPONS[p2Weapon].bonus : 0;
+            p1Total = p1Roll + p1Bonus;
+            p2Total = p2Roll + p2Bonus;
+
+            // If tie, loop again (weapons are not consumed yet)
+        } while (p1Total === p2Total);
+
+        // Now we have a winner - resolve the duel
+        if (p1Total > p2Total) {
+            // Player 1 (attacker) wins
+            // Consume weapons
+            if (p1Weapon) {
+                const weaponIndex = p1.weapons.indexOf(p1Weapon);
+                if (weaponIndex !== -1) {
+                    p1.weapons.splice(weaponIndex, 1);
+                }
+            }
+            if (p2Weapon) {
+                const weaponIndex = p2.weapons.indexOf(p2Weapon);
+                if (weaponIndex !== -1) {
+                    p2.weapons.splice(weaponIndex, 1);
+                }
+            }
+
+            // Reset loser position
+            p2.x = p2.startPos.x;
+            p2.y = p2.startPos.y;
+
+            // Transfer coins
+            const coinsToTransfer = Math.min(100, p2.coins);
+            p2.coins -= coinsToTransfer;
+            p1.coins += coinsToTransfer;
+
+            // End duel
+            game.duelState = null;
+
+            // If attacker has no moves left, set to IDLE
+            if (game.currentMoves <= 0) {
+                game.turnState = 'IDLE';
+            } else {
+                game.turnState = 'MOVE';
+            }
+
+            return {
+                success: true,
+                winner: p1.name,
+                loser: p2.name,
+                coinTransfer: coinsToTransfer,
+                p1Roll: p1Roll,
+                p2Roll: p2Roll,
+                p1Total: p1Total,
+                p2Total: p2Total,
+                p1Weapon: p1Weapon,
+                p2Weapon: p2Weapon
+            };
+        } else {
+            // Player 2 (defender) wins
+            // Consume weapons
+            if (p1Weapon) {
+                const weaponIndex = p1.weapons.indexOf(p1Weapon);
+                if (weaponIndex !== -1) {
+                    p1.weapons.splice(weaponIndex, 1);
+                }
+            }
+            if (p2Weapon) {
+                const weaponIndex = p2.weapons.indexOf(p2Weapon);
+                if (weaponIndex !== -1) {
+                    p2.weapons.splice(weaponIndex, 1);
+                }
+            }
+
+            // Reset loser position (attacker loses)
+            p1.x = p1.startPos.x;
+            p1.y = p1.startPos.y;
+
+            // Transfer coins
+            const coinsToTransfer = Math.min(100, p1.coins);
+            p1.coins -= coinsToTransfer;
+            p2.coins += coinsToTransfer;
+
+            // End duel
+            game.duelState = null;
+            game.currentMoves = 0;
+
+            // Defender wins - attacker (p1) loses turn
+            this.nextTurn(gameId, p1.name);
+
+            return {
+                success: true,
+                winner: p2.name,
+                loser: p1.name,
+                coinTransfer: coinsToTransfer,
+                p1Roll: p1Roll,
+                p2Roll: p2Roll,
+                p1Total: p1Total,
+                p2Total: p2Total,
+                p1Weapon: p1Weapon,
+                p2Weapon: p2Weapon
+            };
+        }
+    }
+
+    /**
      * Select weapon for duel
      * @param {string} gameId - Game ID
      * @param {string} playerName - Player name
@@ -690,12 +859,12 @@ export class GameProcessor {
 
         // Check if it's time to roll (both weapons selected or phase is ROLLING)
         if (game.duelState.phase === 'SELECT_WEAPON') {
-            // Check if both players have selected (weapon can be null)
-            const p1Selected = game.duelState.player1Weapon !== undefined;
-            const p2Selected = game.duelState.player2Weapon !== undefined;
-            
-            if (!p1Selected || !p2Selected) {
-                return { success: false, error: 'Both players must select weapons first' };
+            // Auto-select null weapon if not selected yet
+            if (game.duelState.player1Weapon === undefined) {
+                game.duelState.player1Weapon = null;
+            }
+            if (game.duelState.player2Weapon === undefined) {
+                game.duelState.player2Weapon = null;
             }
             
             // Move to ROLLING phase

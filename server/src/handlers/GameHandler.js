@@ -14,11 +14,13 @@ export class GameHandler {
      * @param {GameProcessor} gameProcessor - GameProcessor instance
      * @param {GameStorage} gameStorage - GameStorage instance
      * @param {Function} getSocket - Function to get socket by socketId
+     * @param {Object} io - Socket.io server instance
      */
-    constructor(gameProcessor, gameStorage, getSocket) {
+    constructor(gameProcessor, gameStorage, getSocket, io) {
         this.gameProcessor = gameProcessor;
         this.storage = gameStorage;
         this.getSocket = getSocket;
+        this.io = io;
     }
 
     /**
@@ -82,6 +84,20 @@ export class GameHandler {
                         playerName,
                         treasureIndex: event.treasureIndex
                     });
+                } else if (event.type === 'DUEL_START') {
+                    // Get current game state to broadcast duel state
+                    const game = this.storage.getGame(gameId);
+                    if (game && game.duelState) {
+                        this.broadcastToAll(gameId, 'game:duel:started', {
+                            player1Name: game.duelState.player1,
+                            player2Name: game.duelState.player2,
+                            player1Weapon: game.duelState.player1Weapon,
+                            player2Weapon: game.duelState.player2Weapon,
+                            player1Roll: game.duelState.player1Roll,
+                            player2Roll: game.duelState.player2Roll,
+                            phase: game.duelState.phase
+                        });
+                    }
                 }
             });
         }
@@ -156,6 +172,60 @@ export class GameHandler {
     }
 
     /**
+     * Handle duel fight action (new simplified logic)
+     * @param {Object} socket - Socket.io socket
+     * @param {string} gameId - Game ID
+     * @param {string} playerName - Player name (must be in turn)
+     */
+    handleDuelFight(socket, gameId, playerName) {
+        console.log('[SERVER] handleDuelFight called:', { gameId, playerName });
+        
+        const result = this.gameProcessor.duelFight(gameId, playerName);
+        
+        if (!result.success) {
+            console.log('[SERVER] Duel fight failed:', result.error);
+            this.sendError(socket, result.error);
+            return;
+        }
+
+        console.log('[SERVER] Duel fight successful:', {
+            winner: result.winner,
+            loser: result.loser,
+            coinTransfer: result.coinTransfer,
+            p1Roll: result.p1Roll,
+            p2Roll: result.p2Roll,
+            p1Total: result.p1Total,
+            p2Total: result.p2Total
+        });
+
+        // Broadcast duel result to all players using broadcastGameState method
+        // This ensures all players with active socket connections receive the result
+        const game = this.storage.getGame(gameId);
+        if (game) {
+            console.log('[SERVER] Broadcasting duel result to', game.players.length, 'players');
+            game.players.forEach(player => {
+                if (player.socketId) {
+                    const playerSocket = this.getSocket(player.socketId);
+                    if (playerSocket) {
+                        playerSocket.emit('game:duel:resolved', result);
+                        console.log('[SERVER] Sent duel result to player:', player.name, 'socket:', player.socketId);
+                    } else {
+                        console.log('[SERVER] Socket not found for player:', player.name, 'socketId:', player.socketId);
+                    }
+                } else {
+                    console.log('[SERVER] No socketId for player:', player.name);
+                }
+            });
+        } else {
+            console.log('[SERVER] Game not found:', gameId);
+        }
+
+        // Broadcast updated state
+        this.broadcastGameState(gameId);
+        console.log('[SERVER] Broadcasted updated game state');
+    }
+
+    /**
      * Handle duel select weapon action
      * @param {Object} socket - Socket.io socket
      * @param {string} gameId - Game ID
@@ -190,6 +260,33 @@ export class GameHandler {
 
         // Broadcast updated state
         this.broadcastGameState(gameId);
+        
+        // Check if both players have rolled - auto-resolve
+        const game = this.storage.getGame(gameId);
+        if (game && game.duelState && game.duelState.phase === 'RESOLVING') {
+            // Auto-resolve after a short delay
+            setTimeout(() => {
+                const resolveResult = this.gameProcessor.duelResolve(gameId, playerName);
+                if (resolveResult.success) {
+                    // Broadcast duel result to all players
+                    const updatedGame = this.storage.getGame(gameId);
+                    if (updatedGame) {
+                        const room = `game:${gameId}`;
+                        const sockets = this.io.sockets.adapter.rooms.get(room);
+                        if (sockets) {
+                            sockets.forEach(socketId => {
+                                const playerSocket = this.io.sockets.sockets.get(socketId);
+                                if (playerSocket) {
+                                    playerSocket.emit('game:duel:resolved', resolveResult);
+                                }
+                            });
+                        }
+                    }
+                    // Broadcast updated state
+                    this.broadcastGameState(gameId);
+                }
+            }, 1500);
+        }
     }
 
     /**
@@ -204,6 +301,22 @@ export class GameHandler {
         if (!result.success) {
             this.sendError(socket, result.error);
             return;
+        }
+
+        // Broadcast duel result to all players (including the one who resolved)
+        const game = this.gameStorage.getGame(gameId);
+        if (game) {
+            // Get all sockets in the game room
+            const room = `game:${gameId}`;
+            const sockets = this.io.sockets.adapter.rooms.get(room);
+            if (sockets) {
+                sockets.forEach(socketId => {
+                    const playerSocket = this.io.sockets.sockets.get(socketId);
+                    if (playerSocket) {
+                        playerSocket.emit('game:duel:resolved', result);
+                    }
+                });
+            }
         }
 
         // Broadcast updated state

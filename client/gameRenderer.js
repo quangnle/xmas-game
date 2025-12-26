@@ -366,12 +366,13 @@ export class GameRenderer {
                 this.ctx.stroke();
             }
             
-            // Label
+            // Label (2 characters)
             this.ctx.fillStyle = '#000';
             this.ctx.font = 'bold 10px Arial';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(p.name.charAt(0).toUpperCase(), px, py);
+            const displayName = p.name.substring(0, 2).toUpperCase();
+            this.ctx.fillText(displayName, px, py);
         });
     }
 
