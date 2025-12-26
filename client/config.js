@@ -32,7 +32,27 @@ export const CAMERA_CONFIG = {
     ZOOM: 1.0
 };
 
-export const SERVER_URL = 'http://localhost:3000';
+// Auto-detect server URL based on current hostname
+// Allows other machines to connect by using the host machine's IP
+// Can be overridden via query parameter: ?server=http://192.168.1.100:3000
+function getServerURL() {
+    // Check for override in URL query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const serverOverride = urlParams.get('server');
+    if (serverOverride) {
+        return serverOverride;
+    }
+    
+    // Auto-detect from current location
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    const hostname = window.location.hostname;
+    const port = '3000'; // Server port
+    
+    // If localhost, use localhost; otherwise use the actual hostname/IP
+    return `${protocol}//${hostname}:${port}`;
+}
+
+export const SERVER_URL = getServerURL();
 
 // Snapshot Configuration (for clue images)
 export const SNAPSHOT_CONFIG = {

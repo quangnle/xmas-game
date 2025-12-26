@@ -6,13 +6,35 @@ A multiplayer online board game where players explore a map, collect clues, hunt
 
 ### Getting Started
 
-1. **Start the Server**: Run `start-api-server.bat` to start the game server
-2. **Start the Client**: Run `start-web-server.bat` to start the web server, then open `http://localhost:8080` in your browser
-3. **Create or Join a Room**: 
-   - Create a room with a custom 3-digit code (or let the system generate one)
-   - Browse available rooms and join with the correct room code
-   - Enter your player name (required, must be unique in the room)
-4. **Start the Game**: Once all players are ready, the host can start the game
+#### Local Development
+
+1. **Start the Server**: Run `start-api-server.bat` to start the game server (port 3000)
+2. **Start the Client**: Run `start-web-server.bat` to start the web server (port 8000)
+3. **Open the Game**: Open `http://localhost:8000` in your browser
+
+#### Multiplayer (Same Network)
+
+1. **Start the Server**: Run `start-api-server.bat` - note the IP address shown in the console
+2. **Start the Client**: Run `start-web-server.bat` on the same machine
+3. **For Other Players**: 
+   - Make sure they're on the same network
+   - Open `http://YOUR_IP:8000` in their browsers (replace YOUR_IP with the server machine's IP)
+   - The game will automatically connect to the server on port 3000
+   - If needed, you can override the server URL: `http://YOUR_IP:8000?server=http://SERVER_IP:3000`
+
+#### Creating/Joining Rooms
+
+1. **Create a Room**: 
+   - Enter your name
+   - Optionally set a custom 3-digit room code
+   - Configure advanced settings (grid size, treasures, weapons, etc.)
+   - Click "Create Room"
+2. **Join a Room**: 
+   - Browse available rooms
+   - Click on a room to join
+   - Enter your name and the room code
+   - Click "Join" or "Reconnect" (if game already started)
+3. **Start the Game**: Once all players are ready, the host can start the game
 
 ### Basic Gameplay
 
