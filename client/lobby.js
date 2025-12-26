@@ -45,12 +45,68 @@ export class LobbyManager {
                                     placeholder="Enter your name" maxlength="20">
                             </div>
                             <div>
-                                <label class="block text-sm font-bold text-gray-700 mb-2">Room Code (6 digits)</label>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">Room Code (3 digits)</label>
                                 <input type="text" id="createRoomCodeInput" 
                                     class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-xl font-bold tracking-widest text-gray-900 bg-white"
-                                    placeholder="000000" maxlength="6" pattern="[0-9]{6}">
+                                    placeholder="000" maxlength="3" pattern="[0-9]{3}">
                                 <p class="text-xs text-gray-500 mt-1">Leave empty for random code</p>
                             </div>
+                            
+                            <!-- Advanced Settings -->
+                            <div class="border-t pt-4">
+                                <button type="button" id="advancedSettingsToggle" 
+                                    class="w-full flex items-center justify-between text-sm font-bold text-gray-700 hover:text-gray-900 mb-2">
+                                    <span>Advanced Settings</span>
+                                    <i class="fas fa-chevron-down" id="advancedSettingsIcon"></i>
+                                </button>
+                                <div id="advancedSettings" class="hidden space-y-4 mt-4">
+                                    <!-- Grid Size -->
+                                    <div>
+                                        <label class="block text-sm font-bold text-gray-700 mb-2">Grid Size</label>
+                                        <input type="number" id="gridSizeInput" 
+                                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                                            value="40" min="20" max="60" step="5">
+                                        <p class="text-xs text-gray-500 mt-1">Size of the game board (20-60)</p>
+                                    </div>
+                                    
+                                    <!-- Number of Gifts -->
+                                    <div>
+                                        <label class="block text-sm font-bold text-gray-700 mb-2">Number of Gifts</label>
+                                        <input type="number" id="numGiftsInput" 
+                                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                                            value="20" min="5" max="50" step="5">
+                                        <p class="text-xs text-gray-500 mt-1">Number of gifts on the board (5-50)</p>
+                                    </div>
+                                    
+                                    <!-- Treasure Values -->
+                                    <div>
+                                        <label class="block text-sm font-bold text-gray-700 mb-2">Treasure Values (comma-separated)</label>
+                                        <input type="text" id="treasureValuesInput" 
+                                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                                            value="100,200,500,1000" placeholder="100,200,500,1000">
+                                        <p class="text-xs text-gray-500 mt-1">Values for each treasure (4 values)</p>
+                                    </div>
+                                    
+                                    <!-- Number of Knives -->
+                                    <div>
+                                        <label class="block text-sm font-bold text-gray-700 mb-2">Number of Knives</label>
+                                        <input type="number" id="numKnivesInput" 
+                                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                                            value="2" min="0" max="10" step="1">
+                                        <p class="text-xs text-gray-500 mt-1">Number of knives on the board (0-10)</p>
+                                    </div>
+                                    
+                                    <!-- Number of Swords -->
+                                    <div>
+                                        <label class="block text-sm font-bold text-gray-700 mb-2">Number of Swords</label>
+                                        <input type="number" id="numSwordsInput" 
+                                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                                            value="2" min="0" max="10" step="1">
+                                        <p class="text-xs text-gray-500 mt-1">Number of swords on the board (0-10)</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <button id="createBtn" 
                                 class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-500 transition">
                                 Create Room
@@ -121,6 +177,21 @@ export class LobbyManager {
         $('refreshRoomsBtn').addEventListener('click', () => this.refreshRoomsList());
         $('leaveLobbyBtn').addEventListener('click', () => this.handleLeave());
         $('startGameBtn').addEventListener('click', () => this.handleStartGame());
+        
+        // Advanced Settings Toggle
+        $('advancedSettingsToggle').addEventListener('click', () => {
+            const settings = $('advancedSettings');
+            const icon = $('advancedSettingsIcon');
+            if (settings.classList.contains('hidden')) {
+                settings.classList.remove('hidden');
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-up');
+            } else {
+                settings.classList.add('hidden');
+                icon.classList.remove('fa-chevron-up');
+                icon.classList.add('fa-chevron-down');
+            }
+        });
         
         // Initialize rooms list
         this.roomsList = [];
@@ -235,8 +306,8 @@ export class LobbyManager {
         }
         
         // Validate code if provided
-        if (code && (code.length !== 6 || !/^\d{6}$/.test(code))) {
-            this.showError('Room code must be 6 digits');
+        if (code && (code.length !== 3 || !/^\d{3}$/.test(code))) {
+            this.showError('Room code must be 3 digits');
             return;
         }
         
@@ -433,7 +504,7 @@ export class LobbyManager {
                             <label class="block text-sm font-bold text-gray-700 mb-2">Room Code</label>
                             <input type="text" id="joinRoomCodeInput" 
                                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-xl font-bold tracking-widest text-gray-900 bg-white"
-                                placeholder="000000" maxlength="6" pattern="[0-9]{6}">
+                                placeholder="000" maxlength="3" pattern="[0-9]{3}">
                         </div>
                         <div id="joinRoomError" class="text-red-600 text-sm hidden"></div>
                         <div class="flex gap-2">
@@ -497,8 +568,8 @@ export class LobbyManager {
             return;
         }
         
-        if (code.length !== 6 || !/^\d{6}$/.test(code)) {
-            this.showJoinRoomError('Room code must be 6 digits');
+        if (code.length !== 3 || !/^\d{3}$/.test(code)) {
+            this.showJoinRoomError('Room code must be 3 digits');
             return;
         }
         

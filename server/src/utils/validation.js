@@ -40,8 +40,8 @@ export function validateLobbyCode(code) {
         return { valid: false, error: 'Lobby code must be a string' };
     }
     
-    if (!/^\d{6}$/.test(code)) {
-        return { valid: false, error: 'Lobby code must be 6 digits' };
+    if (!/^\d{3}$/.test(code)) {
+        return { valid: false, error: 'Lobby code must be 3 digits' };
     }
     
     return { valid: true };

@@ -20,7 +20,7 @@
 /**
  * @typedef {Object} LobbyState
  * @property {string} lobbyId - Lobby ID
- * @property {string} code - 6-digit lobby code
+ * @property {string} code - 3-digit lobby code
  * @property {string} hostId - Host socket ID
  * @property {string} hostName - Host player name
  * @property {LobbyPlayer[]} players - Array of players

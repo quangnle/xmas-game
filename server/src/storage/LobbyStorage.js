@@ -217,14 +217,14 @@ export class LobbyStorage {
     }
 
     /**
-     * Generate unique 6-digit lobby code
+     * Generate unique 3-digit lobby code
      * @returns {string} Lobby code
      */
     generateLobbyCode() {
         let code;
         let attempts = 0;
         do {
-            code = Math.floor(100000 + Math.random() * 900000).toString();
+            code = Math.floor(100 + Math.random() * 900).toString();
             attempts++;
         } while (this.getLobbyByCode(code) && attempts < 100);
         
