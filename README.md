@@ -1,52 +1,96 @@
-# Treasure Hunt Game
+# TREASURE HUNTER
 
-A multiplayer board game where players explore a map, collect clues, and hunt for treasures!
+A multiplayer online board game where players explore a map, collect clues, hunt for treasures, and battle each other in duels!
 
 ## 🎮 How to Play
 
-### Basic Rules
+### Getting Started
 
-1. **Roll Dice**: Click the "ROLL DICE" button to start your turn and determine how many moves you can make
+1. **Start the Server**: Run `start-api-server.bat` to start the game server
+2. **Start the Client**: Run `start-web-server.bat` to start the web server, then open `http://localhost:8080` in your browser
+3. **Create or Join a Room**: 
+   - Create a room with a custom 3-digit code (or let the system generate one)
+   - Browse available rooms and join with the correct room code
+   - Enter your player name (required, must be unique in the room)
+4. **Start the Game**: Once all players are ready, the host can start the game
+
+### Basic Gameplay
+
+1. **Roll Dice**: Click "ROLL DICE" to roll 2 dice (total: 2-12). This determines how many move points you have
 2. **Move**: Use the D-Pad buttons or arrow keys to move around the map
 3. **Terrain Costs**: Different terrain types cost different move points:
-   - ⬜ Snow: 1 move
-   - ❄️ Ice: 2 moves
-   - 🎄 Tree: 3 moves
-4. **Find Snowmen**: Visit ⛄ to receive clues about treasure locations
-5. **Dig for Treasure**: When you have a clue, go to the treasure location and click "DIG"
-6. **Collect Gifts**: Pick up 🎁 to earn +10 coins
-7. **Collect Weapons**: Pick up 🔪 (Knife) or 🗡️ (Sword) to use in duels
-8. **Duel**: Land on another player's space to challenge them ⚔️
+   - ⬜ **Snow**: 1 move point
+   - ❄️ **Ice**: 2 move points
+   - 🎄 **Tree**: 3 move points
+4. **End Turn**: Click "NEXT TURN" when you're done moving, or wait for your moves to run out
+
+### Collecting Items
+
+- **🎁 Gifts**: Pick up gifts scattered around the map to earn coins (default: +10 coins each)
+- **🔪 Knife**: Collect knives to use in duels (+2 bonus)
+- **🗡️ Sword**: Collect swords to use in duels (+3 bonus)
+- **⛄ Snowmen**: Visit snowmen to receive clues about treasure locations
+
+### Finding Treasures
+
+1. **Get Clues**: Visit snowmen (⛄) to receive snapshot clues showing the terrain around hidden treasures
+2. **View Clues**: Open your inventory to review all collected clues
+3. **Dig for Treasure**: When you think you've found a treasure location, stand on it and click "DIG"
+   - If correct: You win the treasure value in coins!
+   - If incorrect: You dig an empty spot (no penalty)
+   - If you have no clues: You can't dig
+
+### Duels ⚔️
+
+When you land on another player's tile, a duel automatically begins:
+
+1. **Automatic Weapon Selection**: If you have weapons, the first available weapon is automatically selected
+2. **Fight**: Click "FIGHT!" to start the duel (only the attacker can click)
+3. **Dice Roll**: Both players automatically roll dice
+4. **Tie Resolution**: If the totals (dice + weapon bonus) are equal, both players re-roll until there's a winner
+5. **Results**:
+   - **Winner**: Takes coins from the loser (amount varies)
+   - **Loser**: Loses coins, is sent back to starting position, and loses the weapon used (if any)
+   - **Weapons**: Only consumed after a decisive win/loss (not during ties)
 
 ### Special Features
 
-- **Extra Turn**: Rolling 6 or 12 gives you an extra turn!
-- **Treasure Clues**: Snowmen provide snapshots showing the terrain around hidden treasures
-- **Weapon System**: 
-  - 🔪 Knife: +2 bonus in duels
-  - 🗡️ Sword: +3 bonus in duels
-  - Pick up weapons scattered around the map
-  - Use one weapon per duel (weapons are consumed after use)
-  - Multiple weapons can be used across multiple duels
-- **Duel System**: When dueling, both players roll dice. Select a weapon before fighting (if you have one). The player with the higher total (dice + weapon bonus) wins. In case of a tie, you roll again until someone wins!
-- **Map Panning**: Click and drag to explore different areas of the map
+- **Extra Turn**: Rolling a total of 6 or 12 gives you an extra turn immediately after your current turn!
+- **Reconnection**: If you disconnect, you can reconnect by browsing rooms, finding your game, and entering your player name and room code
+- **Custom Game Settings**: Room creators can customize:
+  - Grid size (25-50)
+  - Number of gifts (5-50)
+  - Treasure values (1-8 treasures with custom values)
+  - Number of knives (0-20)
+  - Number of swords (0-20)
 
 ### Winning
 
-The player with the most coins at the end wins!
+The player with the most coins at the end wins! Coins are earned from:
+- Finding treasures (values vary, default: 100, 200, 500, 1000)
+- Collecting gifts (+10 coins each, default)
+- Winning duels (taking coins from opponents)
 
-## 🚀 Getting Started
+## 🎯 Tips & Strategies
 
-1. Open `index.html` in a web browser
-2. Start playing with up to 4 players
-3. Take turns rolling dice and exploring the map
-4. Collect treasures and compete for the highest score!
+- **Plan Your Moves**: Save move points wisely - trees are expensive to cross!
+- **Collect Multiple Clues**: The more clues you have, the easier it is to find treasures
+- **Weapon Strategy**: 
+  - Collect weapons early for duel advantages
+  - Save stronger weapons (🗡️ Swords) for important duels
+  - Remember: weapons are consumed after use, so use them wisely!
+- **Duel Tactics**: 
+  - Avoid other players if you're low on coins
+  - Attack when you have weapons for better chances
+  - Be prepared to be sent back to start if you lose!
+- **Map Exploration**: Click and drag to pan the map and explore different areas
+- **Inventory Management**: Check your inventory regularly to review clues and weapons
 
-## 🎯 Tips
+## 🛠️ Technical Details
 
-- Save your move points wisely - some terrain is expensive to cross
-- Collect multiple clues before digging to increase your chances
-- Watch out for other players - duels can send you back to the starting position
-- Collect weapons early - they give significant advantages in duels!
-- Use weapons strategically - save stronger weapons (🗡️) for important duels
-- Use the inventory button to review your clues anytime
+- **Server**: Node.js with Express and Socket.io
+- **Client**: Vanilla JavaScript with HTML5 Canvas
+- **Architecture**: Client-server with server-side authoritative game state
+- **Multiplayer**: Real-time synchronization via WebSockets
+- **Grid Size**: Default 40x40, customizable 25-50
+- **Max Players**: 4 players per game
