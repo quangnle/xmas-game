@@ -139,7 +139,29 @@ io.on('connection', (socket) => {
         allLobbies.forEach(lobby => {
             const player = lobby.players.find(p => p.socketId === socket.id);
             if (player) {
-                lobbyHandler.handleLeaveLobby(socket, lobby.lobbyId, player.name);
+                // If game is already started, don't remove player from lobby
+                // Just mark them as disconnected (they can reconnect)
+                if (lobby.status === 'IN_GAME') {
+                    // Keep player in lobby but clear socketId
+                    player.socketId = null;
+                    // Also update in game state if game exists
+                    if (lobby.gameId) {
+                        const game = gameStorage.getGame(lobby.gameId);
+                        if (game) {
+                            const gamePlayer = game.players.find(p => p.name === player.name);
+                            if (gamePlayer) {
+                                gamePlayer.socketId = null;
+                            }
+                        }
+                    }
+                    // Broadcast lobby update
+                    if (lobbyHandler.io) {
+                        lobbyHandler.broadcastLobbyUpdate(lobby.lobbyId, lobbyHandler.io);
+                    }
+                } else {
+                    // Game not started - remove player normally
+                    lobbyHandler.handleLeaveLobby(socket, lobby.lobbyId, player.name);
+                }
             }
         });
     });

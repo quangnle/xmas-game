@@ -466,7 +466,8 @@ export class GameProcessor {
         // Cost check
         const cellCost = game.grid[ny][nx];
         if (game.currentMoves < cellCost) {
-            return { success: false, error: 'Not enough moves' };
+            // Silently fail - don't show error message
+            return { success: false };
         }
 
         // Execute move

@@ -60,7 +60,10 @@ export class GameHandler {
         const result = this.gameProcessor.movePlayer(gameId, playerName, direction);
         
         if (!result.success) {
-            this.sendError(socket, result.error);
+            // Only send error if there's an error message (skip "Not enough moves")
+            if (result.error) {
+                this.sendError(socket, result.error);
+            }
             return;
         }
 

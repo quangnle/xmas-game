@@ -117,6 +117,62 @@ export class LobbyHandler {
             return;
         }
         
+        // Check if game is already started
+        if (lobby.status === 'IN_GAME' && lobby.gameId) {
+            // Check if player was in this game (reconnection)
+            // First check in game state (authoritative source)
+            const game = this.gameProcessor.getGameState(lobby.gameId);
+            if (!game) {
+                this.sendError(socket, 'Game not found');
+                return;
+            }
+            
+            const gamePlayer = game.players.find(p => p.name === playerName);
+            if (!gamePlayer) {
+                // Player not in game - not allowed to join
+                this.sendError(socket, 'Game has already started. You can only reconnect if you were in this game.');
+                return;
+            }
+            
+            // Player found in game - allow reconnection
+            // Restore player in lobby if not present
+            let existingPlayer = lobby.players.find(p => p.name === playerName);
+            if (!existingPlayer) {
+                // Player was removed from lobby but still in game - restore them
+                existingPlayer = {
+                    userId: socket.id,
+                    name: playerName,
+                    color: gamePlayer.color || this.lobbyStorage.getPlayerColor(lobby.players.length),
+                    ready: true, // Assume ready since game started
+                    socketId: socket.id
+                };
+                lobby.players.push(existingPlayer);
+            } else {
+                // Update socketId
+                existingPlayer.socketId = socket.id;
+            }
+            
+            // Join socket room
+            socket.join(lobby.lobbyId);
+            
+            // Update player socketId in game state
+            gamePlayer.socketId = socket.id;
+            
+            // Send lobby data and trigger game reconnect
+            socket.emit('lobby:joined', lobby);
+            socket.emit('lobby:reconnectToGame', { 
+                gameId: lobby.gameId, 
+                gameState: game 
+            });
+            
+            // Broadcast updated lobby to all players
+            if (this.io) {
+                this.broadcastLobbyUpdate(lobby.lobbyId, this.io);
+            }
+            return;
+        }
+        
+        // Normal join flow for WAITING lobbies
         // Check if lobby is full
         if (lobby.players.length >= lobby.settings.maxPlayers) {
             this.sendError(socket, 'Lobby is full');
@@ -292,14 +348,16 @@ export class LobbyHandler {
         const allLobbies = this.lobbyStorage.getAllLobbies();
         
         // Return only public info (no sensitive data)
+        // Show both WAITING and IN_GAME lobbies
         const publicLobbies = allLobbies
-            .filter(lobby => lobby.status === 'WAITING') // Only show waiting lobbies
+            .filter(lobby => lobby.status === 'WAITING' || lobby.status === 'IN_GAME')
             .map(lobby => ({
                 code: lobby.code,
                 playerCount: lobby.players.length,
                 maxPlayers: lobby.settings.maxPlayers,
                 hostName: lobby.hostName,
-                status: lobby.status
+                status: lobby.status,
+                gameId: lobby.gameId || null // Include gameId for reconnection
             }));
         
         socket.emit('lobby:list', publicLobbies);

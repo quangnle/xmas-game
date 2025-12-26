@@ -16,7 +16,7 @@ export class LobbyStorage {
      * Create a new lobby
      * @param {string} hostName - Host player name
      * @param {string} hostSocketId - Host socket ID
-     * @param {string} [customCode] - Optional custom room code (must be unique)
+     * @param {string} [customCode] - Optional custom room code
      * @param {Object} [settings] - Optional game settings
      * @returns {import('../core/LobbyState.js').LobbyState} Created lobby
      */
@@ -25,10 +25,7 @@ export class LobbyStorage {
         let code;
         
         if (customCode) {
-            // Check if code already exists
-            if (this.getLobbyByCode(customCode)) {
-                throw new Error('Room code already exists');
-            }
+            // Allow duplicate codes - room code is just for privacy, not uniqueness
             code = customCode;
         } else {
             code = this.generateLobbyCode();
@@ -73,10 +70,21 @@ export class LobbyStorage {
 
     /**
      * Get lobby by code
+     * Returns the first available lobby with the code (prefers WAITING status and has space)
      * @param {string} code - Lobby code
      * @returns {import('../core/LobbyState.js').LobbyState|undefined} Lobby state
      */
     getLobbyByCode(code) {
+        // First, try to find a WAITING lobby with space
+        for (const lobby of this.lobbies.values()) {
+            if (lobby.code === code && 
+                lobby.status === 'WAITING' && 
+                lobby.players.length < lobby.settings.maxPlayers) {
+                return lobby;
+            }
+        }
+        
+        // If no WAITING lobby with space, return first match
         for (const lobby of this.lobbies.values()) {
             if (lobby.code === code) {
                 return lobby;
@@ -222,18 +230,13 @@ export class LobbyStorage {
     }
 
     /**
-     * Generate unique 3-digit lobby code
+     * Generate 3-digit lobby code
      * @returns {string} Lobby code
      */
     generateLobbyCode() {
-        let code;
-        let attempts = 0;
-        do {
-            code = Math.floor(100 + Math.random() * 900).toString();
-            attempts++;
-        } while (this.getLobbyByCode(code) && attempts < 100);
-        
-        return code;
+        // Generate random 3-digit code (100-999)
+        // No need to check for uniqueness since codes can be duplicated
+        return Math.floor(100 + Math.random() * 900).toString();
     }
 
     /**

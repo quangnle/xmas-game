@@ -26,6 +26,10 @@ export class LobbyManager {
             const lobbyHTML = `
                 <div id="lobbyScreen" class="fixed inset-0 bg-slate-900 z-50 flex items-center justify-center p-4">
                     <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+                        <!-- Title -->
+                        <div class="text-center mb-6">
+                            <h1 class="text-3xl font-bold text-yellow-400 uppercase tracking-wider mb-2">TREASURE HUNTER</h1>
+                        </div>
                         <!-- Create/Browse Tabs -->
                         <div class="flex gap-2 mb-6 border-b">
                             <button id="createTab" class="flex-1 py-2 px-4 font-bold text-blue-600 border-b-2 border-blue-600">
@@ -256,6 +260,38 @@ export class LobbyManager {
                     gameId, 
                     gameState,
                     lobbyCode: this.currentLobby?.code || null
+                } 
+            }));
+        });
+
+        this.socket.on('lobby:reconnectToGame', ({ gameId, gameState }) => {
+            console.log('Reconnecting to game:', gameId);
+            // Hide lobby screen and room
+            const lobbyScreen = $('lobbyScreen');
+            if (lobbyScreen) {
+                lobbyScreen.classList.add('hidden');
+            }
+            const lobbyRoom = $('lobbyRoom');
+            if (lobbyRoom) {
+                lobbyRoom.classList.add('hidden');
+            }
+            // Hide join modal
+            const joinModal = $('joinRoomModal');
+            if (joinModal) {
+                joinModal.classList.add('hidden');
+            }
+            // Show game container
+            const gameContainer = $('gameContainer');
+            if (gameContainer) {
+                gameContainer.classList.remove('hidden');
+            }
+            // Emit event for game manager to handle reconnection
+            window.dispatchEvent(new CustomEvent('game:started', { 
+                detail: { 
+                    gameId, 
+                    gameState,
+                    lobbyCode: this.currentLobby?.code || null,
+                    isReconnect: true
                 } 
             }));
         });
@@ -503,14 +539,17 @@ export class LobbyManager {
 
         roomsListEl.innerHTML = this.roomsList.map(room => {
             const isFull = room.playerCount >= room.maxPlayers;
+            const isPlaying = room.status === 'IN_GAME';
+            const canJoin = !isFull || isPlaying; // Can join if not full OR if playing (for reconnect)
             return `
-                <div class="border border-gray-300 rounded-lg p-3 hover:bg-gray-50 transition ${isFull ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}" 
-                     ${!isFull ? `onclick="window.lobbyManager.showJoinRoomModal('${room.code}', '${room.hostName}')"` : ''}>
+                <div class="border border-gray-300 rounded-lg p-3 hover:bg-gray-50 transition ${!canJoin ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}" 
+                     ${canJoin ? `onclick="window.lobbyManager.showJoinRoomModal('${room.code}', '${room.hostName}', '${room.status || 'WAITING'}', '${room.gameId || ''}')"` : ''}>
                     <div class="flex justify-between items-center">
                         <div class="flex-1">
                             <div class="flex items-center gap-2 mb-1">
                                 <span class="font-bold text-gray-800 text-lg">${room.hostName}'s Room</span>
-                                ${isFull ? '<span class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded">Full</span>' : ''}
+                                ${isFull && !isPlaying ? '<span class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded">Full</span>' : ''}
+                                ${isPlaying ? '<span class="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded">Playing</span>' : ''}
                             </div>
                         </div>
                         <div class="text-right">
@@ -528,7 +567,7 @@ export class LobbyManager {
     /**
      * Show join room modal
      */
-    showJoinRoomModal(code, hostName) {
+    showJoinRoomModal(code, hostName, status = 'WAITING', gameId = '') {
         // Create or update modal
         let modal = $('joinRoomModal');
         if (!modal) {
@@ -585,8 +624,18 @@ export class LobbyManager {
         $('joinRoomCodeInput').value = '';
         $('joinRoomError').classList.add('hidden');
         
-        // Store expected code for validation
+        // Store expected code, status, and gameId for validation/reconnection
         this.expectedRoomCode = code;
+        this.expectedRoomStatus = status;
+        this.expectedGameId = gameId;
+        
+        // Update button text if reconnecting
+        const joinBtn = $('joinRoomConfirmBtn');
+        if (status === 'IN_GAME') {
+            joinBtn.textContent = 'Reconnect';
+        } else {
+            joinBtn.textContent = 'Join';
+        }
         
         // Show modal
         modal.classList.remove('hidden');

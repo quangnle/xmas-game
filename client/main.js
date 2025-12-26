@@ -27,11 +27,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Listen for game start
     window.addEventListener('game:started', (event) => {
-        const { gameId, gameState, lobbyCode } = event.detail;
+        const { gameId, gameState, lobbyCode, isReconnect } = event.detail;
         const playerName = lobbyManager.getPlayerName();
         
-        // Initialize game client
-        gameClient = new GameClient(socketClient, playerName);
+        // Initialize or reconnect game client
+        if (!gameClient || isReconnect) {
+            gameClient = new GameClient(socketClient, playerName);
+        }
         gameClient.initGame(gameId, gameState, lobbyCode);
     });
 

@@ -382,6 +382,15 @@ export class GameClient {
             lobbyCodeEl.textContent = this.lobbyCode;
         }
 
+        // Update player greeting
+        const greetingEl = $('playerGreeting');
+        if (greetingEl) {
+            const player = this.gameState.players?.find(p => p.name === this.playerName);
+            if (player) {
+                greetingEl.innerHTML = `Hello, <span class="font-bold text-white">${this.playerName}</span>`;
+            }
+        }
+
         // Update buttons
         this.updateButtons();
     }
